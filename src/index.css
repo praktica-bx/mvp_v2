@@ -1,0 +1,110 @@
+/* Berlin Type Web Font */
+@font-face {
+  font-family: 'Berlin Type';
+  src: url('/fonts/BerlinTypeWeb-Regular.woff2') format('woff2'),
+       url('/fonts/BerlinTypeWeb-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Berlin Type';
+  src: url('/fonts/BerlinTypeWeb-Bold.woff2') format('woff2'),
+       url('/fonts/BerlinTypeWeb-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Primary Colors */
+  --color-primary: #0e21a0;
+  --color-primary-dark: #0a1660;
+  --color-primary-light: #e8ecf9;
+  
+  /* Accent Colors */
+  --color-accent1: #4d2fb2;
+  --color-accent2: #b153d7;
+  --color-accent3: #f375c2;
+  
+  /* Neutral Colors */
+  --color-white: #ffffff;
+  --color-bg: #f9f8fc;
+  --color-bg-hover: #f0eff5;
+  
+  /* Text Colors */
+  --color-text-dark: #1a1a1a;
+  --color-text-medium: #4a4a4a;
+  --color-text-light: #8a8a8a;
+  
+  /* Border Col'Berlin Type', ors */
+  --color-border: #d0d0d0;
+  --color-border-light: #e8e8e8;
+  
+  /* Error Colors */
+  --color-error: #d32f2f;
+  --color-error-bg: #ffebee;
+  --color-error-border: #ffcdd2;
+  
+  /* Semantic Colors */
+  --color-warning: #f57c00;
+  --color-success: #388e3c;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Berlin Type', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text-dark);
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  transition: background-color 0.2s;
+}
+
+input:hover, textarea:hover, select:hover {
+  background-color: var(--color-bg-hover);
+}
+
+input:focus, textarea:focus, select:focus {
+  background-color: var(--color-primary-light);
+}
+
+label {
+  display: block;
+}
+
+label[class*="checkbox"] {
+  display: flex;
+  align-items: center;
+}

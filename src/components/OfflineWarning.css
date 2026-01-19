@@ -1,0 +1,53 @@
+.offline-warning {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--color-error);
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 14px;
+  z-index: 999;
+  box-shadow: 0 2px 8px var(--color-overlay-black20);
+  animation: slideDown 0.3s ease-out;
+}
+
+.offline-warning.offline-saving {
+  background-color: var(--color-warning);
+}
+
+.warning-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  flex: 1;
+  margin: 0;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .offline-warning {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .warning-icon {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,35 @@
+.color-swatch-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-black-overlay45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.color-swatch-modal {
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--color-white, var(--color-white));
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 10px 40px var(--color-black-overlay35);
+}
+
+.swatch-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px }
+.swatch-header h2 { margin:0; font-size:20px; color:var(--color-text-dark) }
+.swatch-header .close-btn { background:none; border:none; font-size:20px; cursor:pointer }
+
+.theme-block { margin-bottom:18px }
+.theme-name { margin:0 0 8px 0; font-size:16px; color:var(--color-text-dark) }
+.theme-key { color:var(--color-text-medium); font-size:12px; margin-left:6px }
+
+.theme-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap:10px }
+
+.swatch-row { display:flex; gap:10px; align-items:center; padding:6px; border-radius:6px; background:var(--color-bg-hover); }
+.swatch-sample { min-width:140px; padding:10px; border-radius:6px; font-weight:600; text-align:center }
+.swatch-meta { flex:1 }
+.swatch-var { font-size:13px; color:var(--color-text-medium) }

@@ -1,0 +1,97 @@
+// Helper functions for allergen preferences and storage locations
+import { getSetting } from '../database.js'
+
+/**
+ * Get user's allergen preferences
+ * @returns {Promise<Object>} - Object with allergen IDs as keys, boolean values
+ */
+export const getAllergenPreferences = async () => {
+  return (await getSetting('allergenPreferences')) || {}
+}
+
+/**
+ * Get configured storage locations
+ * @returns {Promise<Array>} - Array of storage location names
+ */
+export const getStorageLocations = async () => {
+  const defaultLocations = ['Bod, gang', 'Bod, sov', 'Kjøkkenskap', 'Kjøleskap', 'Frys']
+  return (await getSetting('storageLocations')) || defaultLocations
+}
+
+/**
+ * Check if product contains allergens user is sensitive to
+ * @param {Object} product - Product object with allergens array or string
+ * @param {Object} userAllergens - User's allergen preferences
+ * @returns {Object} - { hasWarnings: boolean, warnings: string[], isSafe: boolean, safeFor: string[] }
+ */
+export const checkProductAllergens = (product, userAllergens) => {
+  if (!userAllergens || Object.keys(userAllergens).length === 0) {
+    return { hasWarnings: false, warnings: [], isSafe: false, safeFor: [] }
+  }
+
+  // Get allergens from product (can be array or comma-separated string)
+  let productAllergens = []
+  if (Array.isArray(product.allergens)) {
+    productAllergens = product.allergens.map((a) => a.toLowerCase())
+  } else if (typeof product.allergens === 'string') {
+    productAllergens = product.allergens
+      .toLowerCase()
+      .split(',')
+      .map((a) => a.trim())
+      .filter((a) => a)
+  }
+
+  const warnings = []
+  const safeFor = []
+
+  // Check each allergen user cares about
+  const allergenMap = {
+    gluten: ['gluten', 'hvete', 'wheat', 'barley', 'rye'],
+    dairy: ['milk', 'melk', 'dairy', 'laktose', 'lactose', 'whey', 'casein'],
+    eggs: ['egg', 'eggs'],
+    nuts: ['nuts', 'nøtter', 'hazelnut', 'walnut', 'almond', 'cashew'],
+    peanuts: ['peanut', 'peanøtt'],
+    soy: ['soy', 'soya', 'soja'],
+    fish: ['fish', 'fisk'],
+    shellfish: ['shellfish', 'skalldyr', 'shrimp', 'crab'],
+  }
+
+  for (const [allergenId, isEnabled] of Object.entries(userAllergens)) {
+    if (!isEnabled) continue
+
+    const keywords = allergenMap[allergenId] || [allergenId]
+    const found = productAllergens.some((pa) => keywords.some((keyword) => pa.includes(keyword)))
+
+    if (found) {
+      warnings.push(allergenId)
+    } else {
+      safeFor.push(allergenId)
+    }
+  }
+
+  return {
+    hasWarnings: warnings.length > 0,
+    warnings,
+    isSafe: warnings.length === 0 && safeFor.length > 0,
+    safeFor,
+  }
+}
+
+/**
+ * Get allergen display name
+ * @param {string} allergenId - Allergen ID
+ * @returns {string} - Display name
+ */
+export const getAllergenDisplayName = (allergenId) => {
+  const names = {
+    gluten: 'Gluten',
+    dairy: 'Melk',
+    eggs: 'Egg',
+    nuts: 'Nøtter',
+    peanuts: 'Peanøtter',
+    soy: 'Soya',
+    fish: 'Fisk',
+    shellfish: 'Skalldyr',
+  }
+  return names[allergenId] || allergenId
+}

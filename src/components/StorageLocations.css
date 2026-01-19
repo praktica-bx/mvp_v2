@@ -1,0 +1,288 @@
+/* StorageLocations.css */
+
+.storage-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-overlay-black50);
+  display: flex;
+  align-items: flex-end;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.storage-modal {
+  background-color: var(--color-white);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 16px 16px 0 0;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.storage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 2px solid var(--color-border-light);
+  position: sticky;
+  top: 0;
+  background-color: var(--color-white);
+  z-index: 10;
+}
+
+.storage-header h2 {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 1.3rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--color-text-dark);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: var(--color-border-light);
+}
+
+.storage-content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.add-location-section {
+  margin-bottom: 2rem;
+}
+
+.add-location-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--color-text-dark);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.add-location-form {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.location-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid var(--color-border-light);
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: var(--color-white);
+  color: var(--color-text-dark);
+  transition: border-color 0.2s;
+}
+
+.location-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.btn {
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background-color: var(--color-border-light);
+  color: var(--color-text-dark);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.btn-small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.locations-list {
+  margin-bottom: 2rem;
+}
+
+.locations-list h3 {
+  margin: 0 0 1rem 0;
+  color: var(--color-text-dark);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--color-text-medium);
+  font-style: italic;
+}
+
+.location-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.location-item {
+  padding: 1rem;
+  border: 2px solid var(--color-border-light);
+  border-radius: 8px;
+  background-color: var(--color-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.location-item:hover {
+  border-color: var(--color-primary);
+  background-color: white;
+}
+
+.location-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.location-name {
+  font-weight: 600;
+  color: var(--color-text-dark);
+  font-size: 1rem;
+}
+
+.location-count {
+  font-size: 0.85rem;
+  color: var(--color-text-medium);
+}
+
+.location-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background-color: var(--color-overlay-black10);
+}
+
+.edit-location {
+  width: 100%;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.edit-location .location-input {
+  flex: 1;
+}
+
+.location-tips {
+  padding: 1rem;
+  background-color: var(--color-neutral-f0);
+  border-left: 4px solid var(--color-primary);
+  border-radius: 6px;
+}
+
+.location-tips h3 {
+  margin: 0 0 0.75rem 0;
+  color: var(--color-text-dark);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.location-tips ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--color-text-medium);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.location-tips li {
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 600px) {
+  .storage-modal {
+    border-radius: 16px 16px 0 0;
+  }
+
+  .add-location-form {
+    flex-direction: column;
+  }
+
+  .location-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .location-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
