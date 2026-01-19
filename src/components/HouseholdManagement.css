@@ -27,9 +27,8 @@
 }
 
 /* Ensure modal text contrasts with its surface using theme variables */
-.household-management-modal,
-.household-management-modal * {
-  color: var(--color-text-dark) !important;
+.household-management-modal {
+  color: var(--color-text-dark);
 }
 
 .management-header {

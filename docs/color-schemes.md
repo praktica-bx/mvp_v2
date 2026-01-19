@@ -17,7 +17,7 @@ Notes on the samples: each "Sample" shows the color as a background with the tex
 
 | Variable | HEX | Font color | Used for | Sample |
 |---|---:|---:|---|---|
-| `--color-primary` | `#023e8a` | Primary buttons, links, highlights | <span style="display:inline-block;padding:6px 10px;border-radius:4px;background:#023e8a;color:#fff">ABCDEF12345</span> |
+| `--color-primary` | `#023e8a` | `#ffffff` | Primary buttons, links, highlights | <span style="display:inline-block;padding:6px 10px;border-radius:4px;background:#023e8a;color:#fff">ABCDEF12345</span> |
 | `--color-primary-dark` | `#0077b6` | `#ffffff` | Button hover, stronger accents | <span style="display:inline-block;padding:6px 10px;border-radius:4px;background:#0077b6;color:#fff">ABCDEF12345</span> |
 | `--color-primary-light` | `#bee8ff` | `#000000` | Light accents, subtle backgrounds | <span style="display:inline-block;padding:6px 10px;border-radius:4px;background:#bee8ff;color:#000">ABCDEF12345</span> |
 | `--color-accent1` | `#9410ab` | `#ffffff` | Secondary accents, badges | <span style="display:inline-block;padding:6px 10px;border-radius:4px;background:#9410ab;color:#fff">ABCDEF12345</span> |
