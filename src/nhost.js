@@ -206,11 +206,24 @@ export const createHousehold = async (householdName) => {
     if (useLocalAuth) {
       // In local auth mode, create household in localStorage
       const households = JSON.parse(localStorage.getItem('households') || '[]')
+      const id = `household_${Date.now()}_${Math.random()}`
+      const ownerId = getCurrentUserLocal()?.id
+      const ownerEmail = getCurrentUserLocal()?.email || null
       const newHousehold = {
-        id: `household_${Date.now()}_${Math.random()}`,
+        id,
         name: householdName,
         created_at: new Date().toISOString(),
-        owner_id: getCurrentUserLocal()?.id,
+        owner_id: ownerId,
+        household_members: [
+          {
+            id: `hm_${Date.now()}_${Math.random()}`,
+            user_id: ownerId,
+            household_id: id,
+            role: 'admin',
+            email: ownerEmail,
+            name: getCurrentUserLocal()?.username || null,
+          }
+        ]
       }
       households.push(newHousehold)
       localStorage.setItem('households', JSON.stringify(households))
@@ -341,6 +354,75 @@ export const inviteUserToHousehold = async (householdId, userEmail) => {
     return result.data?.insert_household_invitations_one
   } catch (err) {
     console.error('[HOUSEHOLD] Error inviting user:', err)
+    throw err
+  }
+}
+
+/**
+ * Remove a member from a household
+ * memberId: the id of the household_members row or the user_id
+ */
+export const removeHouseholdMember = async (householdId, memberId) => {
+  try {
+    await ensureNhostReady()
+
+    if (useLocalAuth) {
+      // try to remove from households household_members array if present
+      const households = JSON.parse(localStorage.getItem('households') || '[]')
+      const household = households.find(h => h.id === householdId)
+      if (household && household.household_members) {
+        household.household_members = household.household_members.filter(m => (m.id !== memberId && m.user_id !== memberId))
+        localStorage.setItem('households', JSON.stringify(households))
+      }
+      return { success: true }
+    }
+
+    if (!nhostClient) {
+      throw new Error('Nhost client not available')
+    }
+
+    // First try deleting by household_member id
+    const mutationById = `
+      mutation RemoveHouseholdMemberById($memberId: uuid!, $householdId: uuid!) {
+        delete_household_members(where: { id: { _eq: $memberId }, household_id: { _eq: $householdId } }) {
+          affected_rows
+        }
+      }
+    `
+
+    let result = await nhostClient.graphql.request(mutationById, {
+      memberId,
+      householdId,
+    })
+
+    if (result.errors) {
+      // continue to try by user_id fallback
+    }
+
+    const affected = result.data?.delete_household_members?.affected_rows || 0
+    if (affected > 0) return { success: true }
+
+    // Fallback: try delete by user_id
+    const mutationByUser = `
+      mutation RemoveHouseholdMemberByUser($userId: String!, $householdId: uuid!) {
+        delete_household_members(where: { user_id: { _eq: $userId }, household_id: { _eq: $householdId } }) {
+          affected_rows
+        }
+      }
+    `
+
+    result = await nhostClient.graphql.request(mutationByUser, {
+      userId: memberId,
+      householdId,
+    })
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to remove member')
+    }
+
+    return { success: (result.data?.delete_household_members?.affected_rows || 0) > 0 }
+  } catch (err) {
+    console.error('[HOUSEHOLD] Error removing household member:', err)
     throw err
   }
 }

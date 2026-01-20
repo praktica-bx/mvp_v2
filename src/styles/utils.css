@@ -1,0 +1,51 @@
+/* Small utility CSS for layout and spacing — keep minimal and framework-agnostic */
+:root{
+  --container-max-width: 520px; /* comfortable default */
+  --gutter: 20px;
+}
+
+/* Centered content container with responsive max-width and fluid gutters */
+.u-container{
+  width: min(92%, var(--container-max-width));
+  max-width: var(--container-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(8px, 4vw, calc(var(--gutter) / 2));
+  padding-right: clamp(8px, 4vw, calc(var(--gutter) / 2));
+  box-sizing: border-box;
+}
+
+/* Simple flex helpers */
+.u-flex{display:flex}
+.u-flex-col{display:flex;flex-direction:column}
+.u-center{display:flex;align-items:center;justify-content:center}
+.u-gap-sm{gap:8px}
+.u-gap-md{gap:16px}
+
+/* Modal helper to center inner content */
+.u-modal-inner{display:flex;flex-direction:column;align-items:stretch;padding:0}
+
+/* Prevent child elements in modals from expanding past container */
+.modal, .modal-content, .household-management-modal, .storage-modal, .settings-modal {
+  box-sizing: border-box;
+}
+
+/* Wrapping helpers for long words/labels to avoid horizontal scroll */
+h3, h2, .member-name, .location-name, .setting-group label, .household-name {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Ensure form controls respect container width */
+.setting-group input,
+.setting-group select,
+.setting-group textarea,
+.location-input,
+.barcode-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Utility to visually separate sections */
+.u-section{padding:12px;border-radius:8px;background:var(--color-white);box-shadow:0 1px 0 var(--color-overlay-black10)}

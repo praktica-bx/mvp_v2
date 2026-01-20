@@ -82,7 +82,7 @@ export default function FieldPreferencesManager({ onClose }) {
   if (!preferences) {
     return (
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
           <div className="loading">Loading preferences...</div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export default function FieldPreferencesManager({ onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal field-preferences-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal field-preferences-modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Manage Inventory Fields</h2>
           <button className="modal-close" onClick={onClose}>×</button>

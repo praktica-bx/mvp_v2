@@ -139,6 +139,15 @@
   gap: 0.5rem;
 }
 
+/* Defensive: ensure setting groups never exceed their container */
+.setting-group,
+.setting-group * {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .setting-group label {
   font-weight: 600;
   color: var(--color-text-dark);

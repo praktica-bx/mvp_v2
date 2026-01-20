@@ -71,7 +71,7 @@ export default function StorageLocations({ onClose }) {
 
   return (
     <div className="storage-overlay" onClick={onClose}>
-      <div className="storage-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="storage-modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="storage-header">
           <h2>📍 Storage Locations</h2>
           <button className="close-btn" onClick={onClose}>✕</button>

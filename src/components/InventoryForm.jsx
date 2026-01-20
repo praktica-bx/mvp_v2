@@ -3,7 +3,7 @@ import AllergenCheckboxes from './AllergenCheckboxes'
 import { addInventoryItem, getFieldPreferences, trackChange } from '../database'
 import { SUPPLY_CATEGORIES } from '../constants/categories'
 
-export default function InventoryForm({ onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId }) {
+export default function InventoryForm({ onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName }) {
   const [preferences, setPreferences] = useState(null)
   const [formData, setFormData] = useState({
     barcode: scannedBarcode || '',
@@ -354,9 +354,11 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add Item to Inventory</h2>
+          <h2>
+            Add Item to Inventory{householdName ? ` — ${householdName}` : ''}
+          </h2>
           <button className="modal-close" onClick={onCancel}>×</button>
         </div>
 

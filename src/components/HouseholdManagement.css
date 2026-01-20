@@ -16,7 +16,7 @@
 .household-management-modal {
   background: var(--color-white, white);
   border-radius: 12px;
-  width: 100%;
+  width: min(92%, 500px);
   max-width: 500px;
   box-shadow: 0 10px 40px var(--color-overlay-black20);
   margin-top: 20px;
@@ -24,6 +24,7 @@
   flex-direction: column;
   max-height: 90vh;
   overflow-y: auto;
+  padding: 0; /* utilities handle inner padding */
 }
 
 /* Ensure modal text contrasts with its surface using theme variables */
@@ -45,6 +46,24 @@
   color: var(--color-text-dark, #111) !important;
 }
 
+.active-household-label {
+  font-size: 13px;
+  color: var(--color-text-medium, #666);
+  margin-top: 6px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .active-household-label {
+    white-space: normal;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -64,7 +83,49 @@
   gap: 0;
   border-bottom: 1px solid var(--color-border, var(--color-neutral-e-e-e));
   overflow-x: auto;
+  overflow-y: visible; /* allow wrapped rows to be visible */
   padding: 0 20px;
+  margin-bottom: 12px; /* space below tabs so multi-row grids don't overlap following content */
+  position: relative;
+  z-index: 1;
+}
+
+/* Hide native scrollbars for a cleaner look when tabs are scrollable */
+.management-tabs::-webkit-scrollbar { display: none; }
+.management-tabs { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* When there are multiple tabs (4) switch to a grid on small screens to avoid horizontal overflow */
+.management-tabs.many .tab-btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .management-tabs.many {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 8px 12px;
+    overflow-x: hidden; /* grid shouldn't scroll horizontally */
+    overflow-y: visible;
+    /* make sure grid rows have space and aren't clipped */
+    min-height: 120px;
+    padding-bottom: 12px;
+  }
+
+  /* Also hide scrollbar when in grid mode */
+  .management-tabs.many::-webkit-scrollbar { display: none; }
+  .management-tabs.many { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* If the household name is long, make it span the full width on top row */
+  .management-tabs.many.long-name .tab-btn:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .management-tabs .tab-btn {
+    text-align: center;
+  }
 }
 
 .tab-btn {
@@ -96,6 +157,29 @@
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* ensure children fill the container */
+}
+
+/* Prevent flex children from overflowing their container on small screens */
+.management-content,
+.management-content .tab-content,
+.management-content .tab-content > *,
+.household-info,
+.members-list,
+.households-list,
+.household-item {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Center content boxes inside the modal to avoid visual skew */
+.management-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .tab-content {
@@ -113,9 +197,61 @@
   background: var(--color-white, var(--color-white));
   padding: 16px;
   border-radius: 8px;
-  margin-bottom: 20px;
   color: var(--color-text-dark, #111);
   border: 1px solid var(--color-border, #e9e9e9);
+  display: flex;
+  flex-direction: column;
+  margin-left: 0.5rem;
+  width: 100%;
+  max-width: 460px;
+}
+
+/* ensure the info box doesn't overflow and is centered */
+/* merged above */
+
+.contingency-group {
+  margin-top: 12px;
+}
+
+.members-group {
+  margin-top: 12px;
+}
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.member-name {
+  font-size: 14px;
+  color: var(--color-text-dark, #111);
+}
+
+.invite-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.invite-row input[type="email"], .invite-row input[type="text"] {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e9e9e9);
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 13px;
 }
 
 .household-info p {
@@ -221,7 +357,15 @@
   padding: 12px;
   border-radius: 6px;
   font-size: 13px;
-  margin-bottom: 16px;
+  margin-bottom: 0; /* avoid extra vertical offset that can shift layout */
+}
+
+/* ensure modal and children include padding within width calculations */
+.household-management-modal,
+.management-header,
+.management-tabs,
+.management-content {
+  box-sizing: border-box;
 }
 
 .alert-error {
@@ -307,19 +451,18 @@
   flex: 1;
 }
 
-.household-name {
-  font-weight: 500;
-  color: var(--color-text-dark, #111) !important;
-  font-size: 14px;
-}
-
-.household-members {
-  font-size: 12px;
-  color: var(--color-text-medium, var(--color-text-medium));
-}
-
-.current-badge {
-  font-size: 12px;
+.household-info {
+  background: var(--color-white, var(--color-white));
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  color: var(--color-text-dark, #111);
+  border: 1px solid var(--color-border, #e9e9e9);
+  display: flex;
+  flex-direction: column;
+  margin: 12px auto; /* center with vertical spacing */
+  width: 100%;
+  max-width: 460px;
   color: var(--color-primary, var(--color-material-green));
   font-weight: 600;
   white-space: nowrap;
@@ -343,6 +486,7 @@
 
   .management-content {
     padding: 16px;
+    margin-top: 18px; /* ensure content is pushed below tabs */
   }
 
   .tab-content h3 {

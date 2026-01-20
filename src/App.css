@@ -213,8 +213,8 @@
 .modal {
   background: var(--color-white);
   border: 1px solid var(--color-border);
-  max-width: 500px;
-  width: 90%;
+  max-width: var(--container-max-width);
+  width: min(92%, var(--container-max-width));
   max-height: 80vh;
   overflow-y: auto;
   animation: modalSlideUp 0.3s ease-out;
@@ -235,7 +235,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: clamp(12px, 2.5vw, 1.5rem);
   border-bottom: 1px solid var(--color-border-light);
 }
 
@@ -265,7 +265,7 @@
 /* Forms */
 .barcode-form,
 .inventory-form {
-  padding: 1.5rem;
+  padding: clamp(12px, 3vw, 1.5rem);
 }
 
 .form-group {
@@ -411,8 +411,8 @@
 .modal-content {
   background-color: var(--color-white);
   border-radius: 12px;
-  max-width: 600px;
-  width: 90%;
+  max-width: var(--container-max-width);
+  width: min(92%, var(--container-max-width));
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
@@ -432,8 +432,8 @@
 
 .modal-close {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: clamp(8px, 2.5vw, 16px);
+  right: clamp(8px, 2.5vw, 16px);
   background: none;
   border: none;
   font-size: 1.5rem;

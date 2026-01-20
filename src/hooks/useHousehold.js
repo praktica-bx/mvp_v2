@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createHousehold, getUserHouseholds, joinHouseholdByCode, leaveHousehold, deleteHousehold, renameHousehold, isFirstTimeUser } from '../nhost'
+import { createHousehold, getUserHouseholds, joinHouseholdByCode, leaveHousehold, deleteHousehold, renameHousehold, isFirstTimeUser, inviteUserToHousehold, removeHouseholdMember } from '../nhost'
 
 /**
  * Custom hook to manage household selection and operations
@@ -60,6 +60,47 @@ export function useHousehold() {
     } catch (err) {
       console.error('[HOUSEHOLD] Error creating household:', err)
       setError(err.message)
+      return { success: false, error: err.message }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const inviteMember = async (householdId, userEmail) => {
+    try {
+      setIsLoading(true)
+      const invite = await inviteUserToHousehold(householdId, userEmail)
+      // refresh households from server to get updated invites/members
+      const userHouseholds = await getUserHouseholds()
+      setHouseholds(userHouseholds || [])
+      // keep current household reference if present
+      if (currentHousehold && userHouseholds?.some(h => h.id === currentHousehold.id)) {
+        const updated = userHouseholds.find(h => h.id === currentHousehold.id)
+        setCurrentHousehold(updated)
+      }
+      return { success: true, invite }
+    } catch (err) {
+      console.error('[HOUSEHOLD] Error inviting member:', err)
+      return { success: false, error: err.message }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const removeMember = async (householdId, memberId) => {
+    try {
+      setIsLoading(true)
+      const result = await removeHouseholdMember(householdId, memberId)
+      // refresh households
+      const userHouseholds = await getUserHouseholds()
+      setHouseholds(userHouseholds || [])
+      if (currentHousehold && userHouseholds?.some(h => h.id === currentHousehold.id)) {
+        const updated = userHouseholds.find(h => h.id === currentHousehold.id)
+        setCurrentHousehold(updated)
+      }
+      return { success: true }
+    } catch (err) {
+      console.error('[HOUSEHOLD] Error removing member:', err)
       return { success: false, error: err.message }
     } finally {
       setIsLoading(false)
@@ -191,6 +232,8 @@ export function useHousehold() {
     leaveHousehold: leaveHouseholdFunc,
     deleteHousehold: deleteHouseholdFunc,
     renameHousehold: renameHouseholdFunc,
+    inviteMember,
+    removeMember,
     hasHousehold: currentHousehold !== null,
     isFirstTime: !currentHousehold && households.length === 0,
   }

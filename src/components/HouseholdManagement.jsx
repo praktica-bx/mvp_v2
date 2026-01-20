@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import './HouseholdManagement.css'
+import StorageLocations from './StorageLocations'
+import { getHouseholdInviteCode } from '../nhost'
 
 export default function HouseholdManagement({
   currentHousehold,
@@ -30,6 +32,9 @@ export default function HouseholdManagement({
   const [error, setError] = useState('')
   const [actionInProgress, setActionInProgress] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [showStorageLocations, setShowStorageLocations] = useState(false)
+  const tabsClass = `management-tabs ${households.length > 1 ? 'many' : ''} ${currentHousehold?.name && currentHousehold.name.length > 20 ? 'long-name' : ''}`
 
   const handleRenameHousehold = async (e) => {
     e.preventDefault()
@@ -115,11 +120,16 @@ export default function HouseholdManagement({
     <div className="household-management-overlay" onClick={onClose}>
       <div className="household-management-modal" onClick={(e) => e.stopPropagation()}>
         <div className="management-header">
-          <h2>Manage Households</h2>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2>Manage Households</h2>
+            {currentHousehold?.name && (
+              <div className="active-household-label">Active: {currentHousehold.name}</div>
+            )}
+          </div>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
-        <div className="management-tabs">
+        <div className={tabsClass}>
           <button
             className={`tab-btn ${activeTab === 'current' ? 'active' : ''}`}
             onClick={() => {
@@ -127,7 +137,7 @@ export default function HouseholdManagement({
               setError('')
             }}
           >
-            Current: {currentHousehold?.name}
+            {currentHousehold?.name}
           </button>
           <button
             className={`tab-btn ${activeTab === 'rename' ? 'active' : ''}`}
@@ -169,9 +179,8 @@ export default function HouseholdManagement({
             <div className="tab-content">
               <h3>{currentHousehold?.name}</h3>
               <div className="household-info">
-                <p><strong>Members (from membership):</strong> {currentHousehold?.household_members?.length || 1}</p>
                 <div className="setting-group">
-                  <label>Number of Persons (for preparedness)</label>
+                  <label>Number of Persons</label>
                   <input
                     type="number"
                     min="1"
@@ -180,7 +189,7 @@ export default function HouseholdManagement({
                     onChange={(e) => setHouseholdMembers(parseInt(e.target.value) || 1)}
                   />
                 </div>
-                <div className="setting-group">
+                <div className="setting-group contingency-group">
                   <label>Contingency Persons</label>
                   <input
                     type="number"
@@ -190,9 +199,74 @@ export default function HouseholdManagement({
                     onChange={(e) => setContingencyPersons(parseInt(e.target.value) || 0)}
                   />
                 </div>
-                <p className="info-text">
-                  📋 Manage your household, invite others, or create additional households for different locations.
-                </p>
+
+                <div className="setting-group members-group">
+                  <label>Members</label>
+                  {currentHousehold?.household_members?.length ? (
+                    <div className="members-list">
+                      {currentHousehold.household_members.map((m, idx) => (
+                        <div key={m.id || idx} className="member-item">
+                          <span className="member-name">{m.email || m.user_id || m.id || `Member ${idx + 1}`}{m.role === 'admin' ? ' (owner)' : ''}</span>
+                          <button
+                            className="btn btn-secondary btn-small"
+                            onClick={() => {
+                              if (typeof onRemoveMember === 'function') {
+                                onRemoveMember(currentHousehold.id, m.id || m.user_id)
+                              } else {
+                                alert('Removing members is not available in this mode.')
+                              }
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-message">No members listed for this household.</p>
+                  )}
+                  <div className="invite-row">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={async () => {
+                        if (!currentHousehold?.id) return setError('No household selected')
+                        setInviteLoading(true)
+                        setError('')
+                        try {
+                          const code = await getHouseholdInviteCode(currentHousehold.id)
+                          const subject = `Invite to ${currentHousehold.name} — Emergency Supply`
+                          const body = `You've been invited to join the household \"${currentHousehold.name}\" in Emergency Supply.\n\nInvite code: ${code}\n\nOpen the app and enter this code to join.`
+
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({ title: subject, text: body })
+                            } catch (shareErr) {
+                              // user cancelled share sheet; ignore
+                            }
+                          } else {
+                            const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                            window.location.href = mailto
+                          }
+                        } catch (err) {
+                          setError(err.message || 'Failed to create invite code')
+                        } finally {
+                          setInviteLoading(false)
+                        }
+                      }}
+                      disabled={inviteLoading}
+                      style={{ marginBottom: '10px' }}
+                    >
+                      Send invite by mail                    </button>
+                  </div>
+                </div>
+
+                <div className="setting-group">
+                  <div>
+                    <button className="btn btn-secondary" onClick={() => setShowStorageLocations(true)} style={{ marginBottom: '10px' }}>
+                      Manage Storage Locations
+                    </button>
+                  </div>
+                </div>
                 <div className="setting-actions">
                   <button
                     className="btn btn-primary"
@@ -206,6 +280,7 @@ export default function HouseholdManagement({
                         console.error('Error saving household settings', e)
                       }
                     }}
+                    style={{ marginBottom: '10px' }}
                   >
                     Save Household Settings
                   </button>
@@ -216,6 +291,7 @@ export default function HouseholdManagement({
                 className="btn btn-danger"
                 onClick={() => setConfirmDelete(true)}
                 disabled={actionInProgress}
+                style={{ marginBottom: '10px' }}
               >
                 Delete This Household
               </button>
@@ -324,6 +400,9 @@ export default function HouseholdManagement({
           )}
         </div>
       </div>
+      {showStorageLocations && (
+        <StorageLocations onClose={() => setShowStorageLocations(false)} />
+      )}
     </div>
   )
 }

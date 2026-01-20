@@ -77,7 +77,7 @@ export default function BurgerMenu({
                 className="menu-item household-item"
                 onClick={() => handleMenuClick(onShowHouseholdManagement)}
               >
-                <Home size={20} style={{ marginRight: '0.5rem' }} />
+                <Home size={40} style={{ marginRight: '0.5rem' }} />
                 <div className="household-info">
                   <div className="household-name">{currentHousehold.name}</div>
                   <div className="household-subtitle">Manage household</div>

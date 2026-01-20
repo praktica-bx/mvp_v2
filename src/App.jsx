@@ -23,7 +23,7 @@ import { calculateDsbCompleteness } from './constants/dsb-baseline'
 export default function App() {
   useTheme() // Initialize theme system
   const { user, isAuthenticated, isLoading: authLoading, handleAuthSuccess, logout, nhostConfigured } = useAuth()
-  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, isFirstTime } = useHousehold()
+  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime } = useHousehold()
   const [stats, setStats] = useState({ totalItems: 0, expiringSoon: 0, completeness: 0, inventoryByCategory: {} })
   const [showScanner, setShowScanner] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -209,6 +209,7 @@ export default function App() {
               }}
               scannedBarcode={scannedBarcode}
               householdId={currentHousehold?.id}
+              householdName={currentHousehold?.name}
               isOnline={isOnline}
             />
           )}
@@ -221,7 +222,7 @@ export default function App() {
 
           {showChecklist && (
             <div className="modal-overlay" onClick={() => setShowChecklist(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content u-container" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={() => setShowChecklist(false)}>✕</button>
                 <DsbChecklist 
                   inventoryByCategory={stats.inventoryByCategory || {}}
@@ -233,7 +234,7 @@ export default function App() {
 
           {showPreparednessModal && preparednessHousehold && (
             <div className="modal-overlay" onClick={() => setShowPreparednessModal(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content u-container" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={() => setShowPreparednessModal(false)}>✕</button>
                 <h2>Preparedness — {preparednessHousehold.name}</h2>
                 <DsbChecklist 
@@ -257,6 +258,8 @@ export default function App() {
               onRenameHousehold={renameHousehold}
               onDeleteHousehold={deleteHousehold}
               onClose={() => setShowHouseholdManagement(false)}
+              onInviteMember={inviteMember}
+              onRemoveMember={removeMember}
               onSettingsSaved={loadStats}
               isLoading={householdLoading}
             />

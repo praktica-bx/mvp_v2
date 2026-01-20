@@ -17,7 +17,7 @@ export default function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Scan or Enter Barcode</h2>
           <button className="modal-close" onClick={onClose}>×</button>

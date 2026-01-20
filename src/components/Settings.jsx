@@ -94,7 +94,7 @@ export default function Settings({ onClose }) {
 
   return (
     <div className="settings-modal-overlay" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="settings-modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>⚙️ Settings</h2>
           <button className="close-btn" onClick={onClose}>✕</button>
