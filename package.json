@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "lint:styles": "stylelint \"src/**/*.{css,scss,jsx,js,ts,tsx}\" --allow-empty-input",
     "check:colors": "node scripts/check-colors.cjs",
+    "commit:skip-color": "node scripts/commit-wip.cjs",
+    "csk": "npm run commit:skip-color -- --",
     "ci:color-check": "npm run lint:styles && npm run check:colors",
     "prepare": "husky install",
     "preview": "vite preview"

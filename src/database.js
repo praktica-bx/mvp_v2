@@ -8,6 +8,9 @@ import {
   getInventoryChangesSince,
 } from './nhost'
 
+// Re-export nhost helper so consumers can import from `../database`
+export { getInventoryById }
+
 const DB_NAME = 'emergency-supply-db'
 const DB_VERSION = 8 // v8 adds household_id to inventory and other stores
 
