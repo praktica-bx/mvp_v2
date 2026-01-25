@@ -328,10 +328,12 @@ const initDB = async () => {
  * Run database migrations
  * Ensures database is at the current version
  */
-export const runMigrations = async () => {
-  try {
-    const db = await initDB()
-    console.log(`Database initialized at version ${db.version}`)
+  } catch (err) {
+    console.error('Failed to open or upgrade database:', err)
+    // Provide a clearer hint for recovery steps
+    console.error('If this is a migration error you may need to clear the local IndexedDB database (via browser devtools) or bump the DB_VERSION after inspecting migrations.')
+    throw err
+  }
     return { success: true, version: db.version }
   } catch (error) {
     console.error('Migration failed:', error)
@@ -1200,27 +1202,60 @@ export const syncToCloud = async () => {
 
     let syncedCount = 0
 
-    // Send upserts
+    // Send upserts (safe: mark only returned ids as synced)
     if (inventoryUpserts.length > 0) {
-      const res = await upsertInventoryBatch(inventoryUpserts)
-      syncedCount += res.length || 0
-      // Mark local logs as synced
-      for (const up of inventoryUpserts) {
-        await markSynced('inventory', up.id)
+      try {
+        const res = await upsertInventoryBatch(inventoryUpserts)
+        const returnedIds = (res || []).map((r) => r.id).filter(Boolean)
+        syncedCount += returnedIds.length
+        // Mark local logs as synced only for returned ids
+        for (const id of returnedIds) {
+          try {
+            await markSynced('inventory', id)
+          } catch (e) {
+            console.warn('Failed to mark upserted record as synced:', id, e.message || e)
+          }
+        }
+        // If some requested IDs did not return, log for inspection
+        if (returnedIds.length < inventoryUpserts.length) {
+          console.warn(`[SYNC] Partial upsert: requested=${inventoryUpserts.length} returned=${returnedIds.length}`)
+        }
+      } catch (upErr) {
+        console.error('[SYNC] upsertInventoryBatch failed, leaving changes unsynced:', upErr)
       }
     }
 
     // Send deletes
     if (inventoryDeletes.length > 0) {
-      const delRes = await deleteInventoryBatch(inventoryDeletes)
-      syncedCount += inventoryDeletes.length
-      for (const id of inventoryDeletes) {
-        await markSynced('inventory', id)
+      try {
+        const delRes = await deleteInventoryBatch(inventoryDeletes)
+        const affected = delRes?.affected_rows || 0
+        // If delete reports affected rows equal to requested, mark as synced
+        if (affected > 0) {
+          for (const id of inventoryDeletes) {
+            try {
+              await markSynced('inventory', id)
+            } catch (e) {
+              console.warn('Failed to mark deleted record as synced:', id, e.message || e)
+            }
+          }
+          syncedCount += affected
+        } else {
+          console.warn('[SYNC] deleteInventoryBatch reported 0 affected rows')
+        }
+      } catch (delErr) {
+        console.error('[SYNC] deleteInventoryBatch failed, leaving deletes unsynced:', delErr)
       }
     }
 
-    // Update last sync setting (global)
-    await setSetting('lastSync', new Date().toISOString())
+    // Update last sync setting (global) only if we synced something
+    if (syncedCount > 0) {
+      try {
+        await setSetting('lastSync', new Date().toISOString())
+      } catch (e) {
+        console.warn('Failed to update lastSync setting:', e.message || e)
+      }
+    }
 
     return { success: true, synced: syncedCount }
   } catch (err) {

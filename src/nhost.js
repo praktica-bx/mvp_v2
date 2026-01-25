@@ -43,6 +43,24 @@ const initNhost = async () => {
   }
 }
 
+// Generic retry wrapper for network requests
+const retryRequest = async (fn, { retries = 3, delay = 500 } = {}) => {
+  let attempt = 0
+  let wait = delay
+  while (true) {
+    try {
+      return await fn()
+    } catch (err) {
+      attempt++
+      const isLast = attempt >= retries
+      console.warn(`[RETRY] attempt ${attempt} failed${isLast ? ' (last)' : ''}:`, err && err.message ? err.message : err)
+      if (isLast) throw err
+      await new Promise((res) => setTimeout(res, wait))
+      wait *= 2
+    }
+  }
+}
+
 // Start initialization immediately
 initPromise = initNhost()
 
@@ -732,12 +750,17 @@ export const upsertInventoryBatch = async (items = []) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, { objects: items })
+    const call = async () => await nhostClient.graphql.request(mutation, { objects: items })
+    const result = await retryRequest(call, { retries: 3, delay: 400 })
     if (result.errors) {
-      throw new Error(result.errors[0]?.message || 'Failed to upsert inventory batch')
+      const msg = result.errors[0]?.message || 'Failed to upsert inventory batch'
+      console.error('[SYNC] upsertInventoryBatch graphql errors:', result.errors)
+      throw new Error(msg)
     }
 
-    return result.data?.insert_inventory?.returning || []
+    const returning = result.data?.insert_inventory?.returning || []
+    console.log(`[SYNC] upsertInventoryBatch: requested=${items.length} returned=${returning.length}`)
+    return returning
   } catch (err) {
     console.error('[SYNC] upsertInventoryBatch error:', err)
     throw err
@@ -765,12 +788,16 @@ export const deleteInventoryBatch = async (ids = []) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, { ids })
+    const call = async () => await nhostClient.graphql.request(mutation, { ids })
+    const result = await retryRequest(call, { retries: 3, delay: 400 })
     if (result.errors) {
+      console.error('[SYNC] deleteInventoryBatch graphql errors:', result.errors)
       throw new Error(result.errors[0]?.message || 'Failed to delete inventory batch')
     }
 
-    return result.data?.delete_inventory || { affected_rows: 0 }
+    const data = result.data?.delete_inventory || { affected_rows: 0 }
+    console.log(`[SYNC] deleteInventoryBatch: requested=${ids.length} affected=${data.affected_rows || 0}`)
+    return data
   } catch (err) {
     console.error('[SYNC] deleteInventoryBatch error:', err)
     throw err
@@ -804,8 +831,12 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(query, { since: sinceISO, householdId })
-    if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch inventory changes')
+    const call = async () => await nhostClient.graphql.request(query, { since: sinceISO, householdId })
+    const result = await retryRequest(call, { retries: 2, delay: 300 })
+    if (result.errors) {
+      console.error('[SYNC] getInventoryChangesSince graphql errors:', result.errors)
+      throw new Error(result.errors[0]?.message || 'Failed to fetch inventory changes')
+    }
     return result.data?.inventory || []
   } catch (err) {
     console.error('[SYNC] getInventoryChangesSince error:', err)
@@ -840,8 +871,12 @@ export const getInventoryById = async (id) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(query, { id })
-    if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch inventory by id')
+    const call = async () => await nhostClient.graphql.request(query, { id })
+    const result = await retryRequest(call, { retries: 2, delay: 300 })
+    if (result.errors) {
+      console.error('[SYNC] getInventoryById graphql errors:', result.errors)
+      throw new Error(result.errors[0]?.message || 'Failed to fetch inventory by id')
+    }
     return result.data?.inventory_by_pk || null
   } catch (err) {
     console.error('[SYNC] getInventoryById error:', err)
