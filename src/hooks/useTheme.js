@@ -27,6 +27,16 @@ export const useTheme = () => {
       root.style.setProperty(cssVarName, value);
     });
 
+    // Expose an active household color variable that UI can reference.
+    // Use a yellow-ish warning for dark theme, and a red token for light theme.
+    let activeColor = '';
+    if (currentTheme === 'dark') {
+      activeColor = theme.colors.warning || theme.colors.amber500 || '#ffd700';
+    } else {
+      activeColor = theme.colors.red500 || theme.colors.error || '#ff0000';
+    }
+    root.style.setProperty('--color-active-household', activeColor);
+
     // Save to localStorage
     localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
   }, [currentTheme]);

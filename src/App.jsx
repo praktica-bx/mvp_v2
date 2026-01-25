@@ -9,6 +9,7 @@ import ThemeSwitcher from './components/ThemeSwitcher'
 import BurgerMenu from './components/BurgerMenu'
 import DsbChecklist from './components/DsbChecklist'
 import Settings from './components/Settings'
+import { ConflictModalProvider } from './contexts/ConflictModalContext'
 import LoginScreen from './components/LoginScreen'
 import HouseholdSelector from './components/HouseholdSelector'
 import HouseholdOnboarding from './components/HouseholdOnboarding'
@@ -17,7 +18,7 @@ import useOnlineStatus from './hooks/useOnlineStatus'
 import useAuth from './hooks/useAuth'
 import useHousehold from './hooks/useHousehold'
 import { useTheme } from './hooks/useTheme'
-import { getInventoryStats, addInventoryItem, getPendingSyncs, syncToNhost, getInventoryByDsbCategory } from './database'
+import { getInventoryStats, addInventoryItem, getPendingSyncs, syncToNhost, getInventoryByDsbCategory, fetchFromCloud } from './database'
 import { calculateDsbCompleteness } from './constants/dsb-baseline'
 
 export default function App() {
@@ -51,6 +52,21 @@ export default function App() {
       loadStats()
     }
   }, [currentHousehold])
+
+  // On auth + household, fetch recent cloud changes (if configured)
+  useEffect(() => {
+    if (isAuthenticated && currentHousehold && nhostConfigured) {
+      (async () => {
+        try {
+          await fetchFromCloud(currentHousehold.id)
+          await loadStats()
+          checkPendingSyncs()
+        } catch (err) {
+          console.warn('Initial fetchFromCloud failed:', err)
+        }
+      })()
+    }
+  }, [isAuthenticated, currentHousehold, nhostConfigured])
 
   const checkPendingSyncs = async () => {
     try {
@@ -119,7 +135,8 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <ConflictModalProvider>
+      <div className="app">
       {authLoading ? (
         <div className="app-loading">
           <div className="loading-spinner"></div>
@@ -266,6 +283,7 @@ export default function App() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </ConflictModalProvider>
   )
 }

@@ -190,7 +190,7 @@
 
 .location-item:hover {
   border-color: var(--color-primary);
-  background-color: white;
+  background-color: var(--color-bgHover);
 }
 
 .location-info {

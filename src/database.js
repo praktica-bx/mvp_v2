@@ -1,4 +1,12 @@
 import { openDB } from 'idb'
+import {
+  isNhostConfigured,
+  isNhostAuthenticated,
+  upsertInventoryBatch,
+  deleteInventoryBatch,
+  getInventoryById,
+  getInventoryChangesSince,
+} from './nhost'
 
 const DB_NAME = 'emergency-supply-db'
 const DB_VERSION = 8 // v8 adds household_id to inventory and other stores
@@ -1106,6 +1114,23 @@ export const updateInventoryItem = async (id, updates) => {
       throw new Error(`Inventory item with ID ${id} not found`)
     }
 
+    // Lightweight pre-write check: if cloud configured and authenticated,
+    // fetch remote's updated_at and if it's newer than local syncedAt, abort with conflict.
+    try {
+      if (isNhostConfigured() && isNhostAuthenticated()) {
+        const remote = await getInventoryById(id)
+        if (remote && remote.updated_at && item.syncedAt && new Date(remote.updated_at) > new Date(item.syncedAt)) {
+          const err = new Error('Conflict: remote version is newer than local copy')
+          err.code = 'conflict'
+          throw err
+        }
+      }
+    } catch (precheckErr) {
+      // If precheck throws a conflict error, bubble up. Otherwise log and continue.
+      if (precheckErr && precheckErr.code === 'conflict') throw precheckErr
+      console.warn('Pre-write remote check failed; proceeding with local update:', precheckErr.message)
+    }
+
     const updatedItem = {
       ...item,
       ...updates,
@@ -1118,9 +1143,86 @@ export const updateInventoryItem = async (id, updates) => {
 
     // Track change for sync
     await trackChange('inventory', id, 'update')
+    // Trigger background sync (best-effort)
+    try {
+      syncToCloud().catch((e) => console.warn('Background sync failed:', e.message || e))
+    } catch (e) {
+      console.warn('Failed to trigger background sync:', e.message || e)
+    }
   } catch (error) {
     console.error('Failed to update inventory item:', error)
     throw new Error(`Failed to update inventory item: ${error.message}`)
+  }
+}
+
+/**
+ * Sync pending local changes to the cloud via GraphQL
+ * - Currently handles inventory create/update/delete in batches
+ */
+export const syncToCloud = async () => {
+  try {
+    if (!isNhostConfigured() || !isNhostAuthenticated()) {
+      return { success: false, reason: 'Not configured or not authenticated' }
+    }
+
+    const pending = await getPendingChanges()
+    if (!pending || pending.length === 0) return { success: true, synced: 0 }
+
+    // Group inventory changes
+    const inventoryUpserts = []
+    const inventoryDeletes = []
+
+    for (const change of pending) {
+      if (change.table !== 'inventory') continue
+
+      if (change.operation === 'delete') {
+        inventoryDeletes.push(change.recordId)
+      } else if (change.data) {
+        // Map local data to a server-friendly shape. Server schema may need to accept these fields.
+        const obj = {
+          id: change.data.id,
+          household_id: change.data.household_id,
+          product_id: change.data.productId || null,
+          quantity: change.data.quantity || null,
+          expiry_date: change.data.expiryDate || null,
+          added_at: change.data.addedAt || null,
+          _deleted: !!change.data._deleted,
+          allowGracePeriod: !!change.data.allowGracePeriod,
+          gracePeriodMonths: change.data.gracePeriodMonths || null,
+          imageUrl: change.data.imageUrl || null,
+        }
+        inventoryUpserts.push(obj)
+      }
+    }
+
+    let syncedCount = 0
+
+    // Send upserts
+    if (inventoryUpserts.length > 0) {
+      const res = await upsertInventoryBatch(inventoryUpserts)
+      syncedCount += res.length || 0
+      // Mark local logs as synced
+      for (const up of inventoryUpserts) {
+        await markSynced('inventory', up.id)
+      }
+    }
+
+    // Send deletes
+    if (inventoryDeletes.length > 0) {
+      const delRes = await deleteInventoryBatch(inventoryDeletes)
+      syncedCount += inventoryDeletes.length
+      for (const id of inventoryDeletes) {
+        await markSynced('inventory', id)
+      }
+    }
+
+    // Update last sync setting (global)
+    await setSetting('lastSync', new Date().toISOString())
+
+    return { success: true, synced: syncedCount }
+  } catch (err) {
+    console.error('syncToCloud failed:', err)
+    throw err
   }
 }
 
@@ -1749,5 +1851,136 @@ export const syncToNhost = async (nhostClient) => {
   } catch (error) {
     console.error('[SYNC] Sync failed:', error)
     return { success: false, synced: 0, failed: 0, message: error.message }
+  }
+}
+
+/**
+ * Fetch changes from cloud and apply to local DB for a household
+ * - Uses server `updated_at` as authoritative timestamp
+ */
+export const fetchFromCloud = async (householdId) => {
+  try {
+    if (!householdId) throw new Error('householdId required')
+    if (!isNhostConfigured() || !isNhostAuthenticated()) {
+      return { success: false, reason: 'Not configured or not authenticated' }
+    }
+
+    // Last sync per-household
+    const lastSyncKey = `lastSync:${householdId}`
+    const lastSync = (await getSetting(lastSyncKey)) || new Date(0).toISOString()
+
+    const changes = await getInventoryChangesSince(lastSync, householdId)
+    if (!changes || changes.length === 0) {
+      await setSetting(lastSyncKey, new Date().toISOString())
+      return { success: true, applied: 0 }
+    }
+
+    const db = await initDB()
+    const tx = db.transaction('inventory', 'readwrite')
+    let applied = 0
+
+    for (const row of changes) {
+      const existing = await tx.store.get(row.id)
+
+      if (row._deleted) {
+        if (existing) {
+          existing._deleted = true
+          existing.syncedAt = row.updated_at || new Date().toISOString()
+          await tx.store.put(existing)
+        } else {
+          // create tombstone
+          await tx.store.put({
+            id: row.id,
+            household_id: row.household_id,
+            _deleted: true,
+            syncedAt: row.updated_at || new Date().toISOString(),
+          })
+        }
+        applied++
+        continue
+      }
+
+      const toPut = {
+        id: row.id,
+        household_id: row.household_id,
+        productId: row.product_id || null,
+        quantity: row.quantity || null,
+        expiryDate: row.expiry_date || null,
+        addedAt: row.added_at || new Date().toISOString(),
+        lastCheckedAt: row.updated_at || new Date().toISOString(),
+        notificationSent: false,
+        syncedAt: row.updated_at || new Date().toISOString(),
+        _deleted: !!row._deleted,
+        allowGracePeriod: !!row.allowGracePeriod,
+        gracePeriodMonths: row.gracePeriodMonths || null,
+        imageUrl: row.imageUrl || null,
+      }
+
+      await tx.store.put({ ...existing, ...toPut })
+      applied++
+    }
+
+    await tx.done
+
+    // Update lastSync marker
+    await setSetting(lastSyncKey, new Date().toISOString())
+
+    return { success: true, applied }
+  } catch (err) {
+    console.error('fetchFromCloud failed:', err)
+    throw err
+  }
+}
+
+/**
+ * Force update inventory item without pre-write remote check.
+ * Use this when the user explicitly chooses to overwrite remote data.
+ */
+export const updateInventoryItemForce = async (id, updates) => {
+  try {
+    const db = await initDB()
+    const tx = db.transaction('inventory', 'readwrite')
+    const item = await tx.store.get(id)
+
+    if (!item) {
+      throw new Error(`Inventory item with ID ${id} not found`)
+    }
+
+    const updatedItem = {
+      ...item,
+      ...updates,
+      lastCheckedAt: new Date().toISOString(),
+      syncedAt: null, // Mark as needing sync
+    }
+
+    await tx.store.put(updatedItem)
+    await tx.done
+
+    // Track change for sync
+    await trackChange('inventory', id, 'update')
+
+    // Trigger background sync (best-effort)
+    try {
+      syncToCloud().catch((e) => console.warn('Background sync failed:', e.message || e))
+    } catch (e) {
+      console.warn('Failed to trigger background sync:', e.message || e)
+    }
+  } catch (error) {
+    console.error('Failed to force update inventory item:', error)
+    throw new Error(`Failed to update inventory item: ${error.message}`)
+  }
+}
+
+/**
+ * Get a single inventory item by id from local DB
+ */
+export const getInventoryItem = async (id) => {
+  try {
+    const db = await initDB()
+    const item = await db.get('inventory', id)
+    return item || null
+  } catch (err) {
+    console.error('Failed to get inventory item:', err)
+    throw err
   }
 }

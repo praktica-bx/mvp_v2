@@ -1,41 +1,21 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ThemeSwitcherFull } from './ThemeSwitcher'
 import ColorSwatch from './ColorSwatch'
 import './Settings.css'
+import { syncToCloud, getSetting } from '../database'
 
 export default function Settings({ onClose }) {
-  const [activeTab, setActiveTab] = useState('household')
-  const [householdMembers, setHouseholdMembers] = useState(
-    parseInt(localStorage.getItem('household-members') || '1')
-  )
-  const [contingencyPersons, setContingencyPersons] = useState(
-    parseInt(localStorage.getItem('contingency-persons') || '0')
-  )
+  const [activeTab, setActiveTab] = useState('display')
   const [language, setLanguage] = useState(localStorage.getItem('app-language') || 'EN')
   const [notifications, setNotifications] = useState(
     localStorage.getItem('notifications-enabled') !== 'false'
   )
-  const [storageLocations, setStorageLocations] = useState(() => {
-    const saved = localStorage.getItem('storage-locations')
-    if (saved) {
-      return JSON.parse(saved)
-    }
-    return [
-      { id: 1, name: 'Kitchen Pantry', itemCount: 0 },
-      { id: 2, name: 'Basement Storage', itemCount: 0 },
-      { id: 3, name: 'Garage', itemCount: 0 },
-    ]
-  })
-  const [newLocation, setNewLocation] = useState('')
-  const [editingId, setEditingId] = useState(null)
-  const [editingName, setEditingName] = useState('')
+  
   const [showColorSwatches, setShowColorSwatches] = useState(false)
+  const [syncStatus, setSyncStatus] = useState(null)
+  const [lastSync, setLastSync] = useState(null)
 
-  const handleSaveHousehold = () => {
-    localStorage.setItem('household-members', householdMembers.toString())
-    localStorage.setItem('contingency-persons', contingencyPersons.toString())
-    alert('Household settings saved!')
-  }
+  
 
   const handleLanguageChange = (lang) => {
     setLanguage(lang)
@@ -48,49 +28,7 @@ export default function Settings({ onClose }) {
     localStorage.setItem('notifications-enabled', newValue.toString())
   }
 
-  // Storage locations functions
-  const saveLocations = (updated) => {
-    setStorageLocations(updated)
-    localStorage.setItem('storage-locations', JSON.stringify(updated))
-  }
-
-  const addLocation = () => {
-    if (!newLocation.trim()) return
-    const location = {
-      id: Date.now(),
-      name: newLocation,
-      itemCount: 0,
-    }
-    saveLocations([...storageLocations, location])
-    setNewLocation('')
-  }
-
-  const deleteLocation = (id) => {
-    if (window.confirm('Delete this storage location?')) {
-      saveLocations(storageLocations.filter((loc) => loc.id !== id))
-    }
-  }
-
-  const startEdit = (location) => {
-    setEditingId(location.id)
-    setEditingName(location.name)
-  }
-
-  const saveEdit = (id) => {
-    if (!editingName.trim()) return
-    saveLocations(
-      storageLocations.map((loc) =>
-        loc.id === id ? { ...loc, name: editingName } : loc
-      )
-    )
-    setEditingId(null)
-    setEditingName('')
-  }
-
-  const cancelEdit = () => {
-    setEditingId(null)
-    setEditingName('')
-  }
+  
 
   return (
     <div className="settings-modal-overlay" onClick={onClose}>
@@ -101,24 +39,14 @@ export default function Settings({ onClose }) {
         </div>
 
         <div className="settings-tabs">
-          <button
-            className={`tab-btn ${activeTab === 'household' ? 'active' : ''}`}
-            onClick={() => setActiveTab('household')}
-          >
-            👥 Household
-          </button>
+          {/* Household tab removed (obsolete) */}
           <button
             className={`tab-btn ${activeTab === 'display' ? 'active' : ''}`}
             onClick={() => setActiveTab('display')}
           >
             🎨 Display
           </button>
-          <button
-            className={`tab-btn ${activeTab === 'storage' ? 'active' : ''}`}
-            onClick={() => setActiveTab('storage')}
-          >
-            📍 Storage
-          </button>
+          {/* Storage moved to Household Management (Manage Storage Locations) */}
           <button
             className={`tab-btn ${activeTab === 'data' ? 'active' : ''}`}
             onClick={() => setActiveTab('data')}
@@ -134,13 +62,7 @@ export default function Settings({ onClose }) {
         </div>
 
         <div className="settings-content">
-          {/* Household Tab */}
-          {activeTab === 'household' && (
-            <div className="settings-section">
-              <h3>Household Settings</h3>
-              <p>Household-specific preparedness settings (number of persons, contingency) are managed in <strong>Manage Households</strong> — open the menu and choose "Manage household" for the active household.</p>
-            </div>
-          )}
+          {/* Household tab removed - managed via Manage Households */}
 
           {/* Display Tab */}
           {activeTab === 'display' && (
@@ -183,83 +105,7 @@ export default function Settings({ onClose }) {
             </div>
           )}
 
-          {/* Storage Tab */}
-          {activeTab === 'storage' && (
-            <div className="settings-section">
-              <h3>Storage Locations</h3>
-
-              <div className="add-location-form">
-                <input
-                  type="text"
-                  value={newLocation}
-                  onChange={(e) => setNewLocation(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addLocation()}
-                  placeholder="e.g., Kitchen Pantry, Basement..."
-                  className="location-input"
-                />
-                <button className="btn btn-primary btn-small" onClick={addLocation}>
-                  Add
-                </button>
-              </div>
-
-              <div className="location-items">
-                {storageLocations.length === 0 ? (
-                  <p className="empty-message">No storage locations yet. Add one above!</p>
-                ) : (
-                  storageLocations.map((location) => (
-                    <div key={location.id} className="location-item">
-                      {editingId === location.id ? (
-                        <div className="edit-location">
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            className="location-input"
-                            autoFocus
-                          />
-                          <button
-                            className="btn btn-small btn-primary"
-                            onClick={() => saveEdit(location.id)}
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="btn btn-small btn-secondary"
-                            onClick={cancelEdit}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="location-info">
-                            <span className="location-name">{location.name}</span>
-                            <span className="location-count">{location.itemCount || 0} items</span>
-                          </div>
-                          <div className="location-actions">
-                            <button
-                              className="action-btn"
-                              onClick={() => startEdit(location)}
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              className="action-btn"
-                              onClick={() => deleteLocation(location.id)}
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+          {/* Storage locations moved to Household Management (Manage Storage Locations) */}
 
           {showColorSwatches && (
             <ColorSwatch onClose={() => setShowColorSwatches(false)} />
@@ -283,6 +129,30 @@ export default function Settings({ onClose }) {
               <div className="setting-group">
                 <button className="btn btn-danger">🗑️ Clear All Data</button>
                 <small>Delete all inventory (cannot be undone)</small>
+              </div>
+
+              <div className="setting-group">
+                <label>Cloud Sync</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={async () => {
+                      setSyncStatus('running')
+                      try {
+                        const res = await syncToCloud()
+                        setSyncStatus(res.success ? 'ok' : 'failed')
+                        setLastSync(new Date().toISOString())
+                      } catch (err) {
+                        setSyncStatus('failed')
+                        console.error('Manual sync failed:', err)
+                      }
+                    }}
+                  >
+                    🔁 Sync now
+                  </button>
+                  <small style={{ opacity: 0.9 }}>{syncStatus === 'running' ? 'Syncing…' : syncStatus === 'ok' ? 'Last synced just now' : syncStatus === 'failed' ? 'Last sync failed' : ''}</small>
+                </div>
+                <small>Sync pending local changes to the cloud and fetch recent updates on startup.</small>
               </div>
             </div>
           )}

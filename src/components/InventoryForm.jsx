@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react'
 import AllergenCheckboxes from './AllergenCheckboxes'
-import { addInventoryItem, getFieldPreferences, trackChange } from '../database'
+import OpenFoodFactsSearchModal from './OpenFoodFactsSearchModal'
+import { useConflictModal } from '../contexts/ConflictModalContext'
+import {
+  addInventoryItem,
+  getFieldPreferences,
+  trackChange,
+  getInventoryItem,
+  updateInventoryItem,
+  updateInventoryItemForce,
+  getInventoryById,
+  fetchFromCloud,
+} from '../database'
 import { SUPPLY_CATEGORIES } from '../constants/categories'
 
-export default function InventoryForm({ onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName }) {
+export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName }) {
   const [preferences, setPreferences] = useState(null)
   const [formData, setFormData] = useState({
     barcode: scannedBarcode || '',
+    brand: '',
     productName: '',
     quantity: 1,
     unit: 'pcs',
@@ -25,6 +37,17 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
     dietaryRestrictions: [],
     priorityLevel: 'important',
     packaging: '',
+    ingredients: '',
+    packageSize: '',
+    countryOfOrigin: '',
+    storageInstructions: '',
+    manufacturer: '',
+    prescriptionRequired: false,
+    dosage: '',
+    batteryChemistry: '',
+    manufactureDate: '',
+    allowGracePeriod: false,
+    gracePeriodMonths: 0,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,6 +61,49 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
     loadPreferences()
   }, [])
 
+  // Load item data if editing
+  useEffect(() => {
+    if (!itemId) return
+    const loadItem = async () => {
+      try {
+        const local = await getInventoryItem(itemId)
+        if (local) {
+          // Map local fields into formData shape
+          setFormData((prev) => ({
+            ...prev,
+            ...local,
+            barcode: local.barcode || '',
+            productName: local.productName || '',
+            quantity: local.quantity || 1,
+            unit: local.unit || 'pcs',
+            expiryDate: local.expiryDate || '',
+            category: local.category || 'water',
+            allergens: local.allergens || [],
+            storageLocation: local.storageLocation || '',
+            cost: local.cost || '',
+            purchaseDate: local.purchaseDate || new Date().toISOString().split('T')[0],
+            preferredConsumptionDate: local.preferredConsumptionDate || '',
+            supplier: local.supplier || '',
+            storageNotes: local.storageNotes || '',
+            itemStatus: local.itemStatus || 'unopened',
+            lotNumber: local.lotNumber || '',
+            nutritionInfo: local.nutritionInfo || '',
+            dietaryRestrictions: local.dietaryRestrictions || [],
+            priorityLevel: local.priorityLevel || 'important',
+            packaging: local.packaging || '',
+            allowGracePeriod: !!local.allowGracePeriod,
+            gracePeriodMonths: local.gracePeriodMonths || 0,
+          }))
+        }
+      } catch (err) {
+        console.warn('Failed to load local item for edit:', err)
+      }
+    }
+    loadItem()
+  }, [itemId])
+
+  const { open: openConflictModal } = useConflictModal()
+
   // Update barcode when scanned barcode changes
   useEffect(() => {
     if (scannedBarcode) {
@@ -45,9 +111,62 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
     }
   }, [scannedBarcode])
 
+  const [ofModalOpen, setOfModalOpen] = useState(false)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState(null)
+  const [storageLocations, setStorageLocations] = useState([])
+
+  const applyOpenFoodFacts = (product) => {
+    if (!product) return
+    // Overwrite fields as requested
+    setFormData((prev) => ({
+      ...prev,
+      productName: product.product_name || product.product_name_en || prev.productName,
+      brand: product.brands || prev.brand,
+      imageUrl: product.image_front_small_url || product.image_url || prev.imageUrl,
+      ingredients: product.ingredients_text || prev.ingredients,
+      allergens: product.allergens_tags ? product.allergens_tags.map(a => a.replace('en:', '')) : prev.allergens,
+      nutritionInfo: product.nutriments || prev.nutritionInfo,
+      packaging: product.packaging || prev.packaging,
+      quantity: product.quantity || prev.quantity,
+    }))
+  }
+
+  const doLookupBarcode = async (barcode) => {
+    setLookupError(null)
+    if (!barcode) return
+    setLookupLoading(true)
+    try {
+      const prod = await import('../services/openFoodFacts').then(m => m.lookupByBarcode(barcode))
+      applyOpenFoodFacts(prod)
+    } catch (err) {
+      console.warn('OF lookup failed', err)
+      setLookupError(err.message || 'Lookup failed')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const loadLocations = () => {
+      try {
+        let saved = null
+        if (householdId) saved = localStorage.getItem(`storage-locations:${householdId}`)
+        if (!saved) saved = localStorage.getItem('storage-locations')
+        if (saved) setStorageLocations(JSON.parse(saved))
+        else setStorageLocations([])
+      } catch (err) {
+        console.warn('Failed to load storage locations:', err)
+        setStorageLocations([])
+      }
+    }
+    loadLocations()
+  }, [householdId])
+
   const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    const { name, value, type, checked } = e.target
+    const newValue = type === 'checkbox' ? checked : value
+    setFormData((prev) => ({ ...prev, [name]: newValue }))
   }
 
   const handleAllergenChange = (allergens) => {
@@ -87,6 +206,14 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
     try {
       validateForm()
 
+      // Grace period validation
+      if (formData.allowGracePeriod) {
+        const months = parseInt(formData.gracePeriodMonths, 10)
+        if (isNaN(months) || months < 0) {
+          throw new Error('Grace period months must be a non-negative integer')
+        }
+      }
+
       // Only include fields that are visible (optional: only include visible ones to save space)
       const itemToSave = {
         addedDate: new Date().toISOString(),
@@ -104,12 +231,69 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
         }
       })
 
-      const itemId = await addInventoryItem(itemToSave, householdId)
+      // Always include grace period fields
+      itemToSave.allowGracePeriod = !!formData.allowGracePeriod
+      itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0
 
-      // If offline, track this for sync
-      if (!isOnline) {
-        await trackChange('inventory', itemId, 'create')
-        setError('') // Clear any previous errors
+      // Include added category-dependent fields
+      itemToSave.brand = formData.brand || null
+      itemToSave.ingredients = formData.ingredients || null
+      itemToSave.packageSize = formData.packageSize || null
+      itemToSave.countryOfOrigin = formData.countryOfOrigin || null
+      itemToSave.storageInstructions = formData.storageInstructions || null
+      itemToSave.manufacturer = formData.manufacturer || null
+      itemToSave.prescriptionRequired = !!formData.prescriptionRequired
+      itemToSave.dosage = formData.dosage || null
+      itemToSave.batteryChemistry = formData.batteryChemistry || null
+      itemToSave.manufactureDate = formData.manufactureDate || null
+
+      let savedId = null
+      if (itemId) {
+        // EDIT existing
+        try {
+          await updateInventoryItem(itemId, itemToSave)
+          savedId = itemId
+        } catch (err) {
+          // Conflict from pre-write remote check
+          if (err && err.code === 'conflict') {
+            try {
+              const remote = await getInventoryById(itemId)
+              const local = await getInventoryItem(itemId)
+              const choice = await openConflictModal({ local: { ...local }, remote: { ...remote } })
+              if (choice.action === 'keepLocal') {
+                await updateInventoryItemForce(itemId, itemToSave)
+                savedId = itemId
+              } else if (choice.action === 'useRemote') {
+                // Pull remote changes for the household and refresh
+                await fetchFromCloud(householdId)
+                // Do not overwrite remote; treat remote as authoritative
+                savedId = itemId
+              } else {
+                // cancel
+                setError('Edit cancelled due to conflict')
+                setLoading(false)
+                return
+              }
+            } catch (modalErr) {
+              console.error('Conflict resolution failed:', modalErr)
+              setError('Conflict resolution failed')
+              setLoading(false)
+              return
+            }
+          } else {
+            throw err
+          }
+        }
+      } else {
+        // CREATE new
+        const newId = await addInventoryItem(itemToSave, householdId)
+        savedId = newId
+
+        // If offline, track this for sync
+        if (!isOnline) {
+          await trackChange('inventory', newId, 'create')
+          setError('') // Clear any previous errors
+        }
       }
 
       // Reset form
@@ -133,6 +317,17 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
         dietaryRestrictions: [],
         priorityLevel: 'important',
         packaging: '',
+        ingredients: '',
+        packageSize: '',
+        countryOfOrigin: '',
+        storageInstructions: '',
+        manufacturer: '',
+        prescriptionRequired: false,
+        dosage: '',
+        batteryChemistry: '',
+        manufactureDate: '',
+        allowGracePeriod: false,
+        gracePeriodMonths: 0,
       })
       onSave()
     } catch (err) {
@@ -159,16 +354,25 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
-            <input
-              id={fieldName}
-              type="text"
-              name={fieldName}
-              value={value}
-              onChange={handleChange}
-              onClick={onOpenScanner}
-              placeholder="Click to scan or enter barcode"
-              required={config.mandatory}
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                id={fieldName}
+                type="text"
+                name={fieldName}
+                value={value}
+                onChange={handleChange}
+                onClick={onOpenScanner}
+                placeholder="Click to scan or enter barcode"
+                required={config.mandatory}
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading}>
+                {lookupLoading ? '…' : 'Lookup'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setOfModalOpen(true)}>
+                Search
+              </button>
+            </div>
           </div>
         )
 
@@ -299,6 +503,18 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
         )
 
       case 'storageLocation':
+        return (
+          <div key={fieldName} className="form-group">
+            <label htmlFor={fieldName}>{label}</label>
+            <select id={fieldName} name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
+              <option value="">Select location</option>
+              {storageLocations.map((loc) => (
+                <option key={loc.id} value={loc.name}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+        )
+
       case 'supplier':
       case 'lotNumber':
       case 'nutritionInfo':
@@ -368,6 +584,7 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
             <>
               {renderField('barcode')}
               {renderField('productName')}
+              {renderField('category')}
             </>
           )}
 
@@ -381,8 +598,112 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
 
           {/* Core fields */}
           {renderField('expiryDate')}
-          {renderField('category')}
+          {/* Grace period: checkbox + months */}
+          <div className="form-group">
+            <label className="checkbox-label grace-checkbox-label">
+              <input
+                id="allowGracePeriod"
+                className="grace-checkbox"
+                type="checkbox"
+                name="allowGracePeriod"
+                checked={formData.allowGracePeriod}
+                onChange={handleChange}
+              />
+              <span style={{ marginLeft: '0.5rem' }}>Allow grace period</span>
+            </label>
+          </div>
+
+          {formData.allowGracePeriod && (
+            <div className="form-group">
+              <label htmlFor="gracePeriodMonths">Grace period (months)</label>
+              <input
+                id="gracePeriodMonths"
+                type="number"
+                name="gracePeriodMonths"
+                value={formData.gracePeriodMonths}
+                onChange={handleChange}
+                min="0"
+                step="1"
+              />
+            </div>
+          )}
           {renderField('allergens')}
+
+          {/* Category-dependent fields */}
+          {/* Brand (general) */}
+          <div className="form-group">
+            <label htmlFor="brand">Brand</label>
+            <input id="brand" name="brand" type="text" value={formData.brand} onChange={handleChange} />
+          </div>
+
+          {/* Food-specific */}
+          {formData.category === 'food' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="ingredients">Ingredients</label>
+                <textarea id="ingredients" name="ingredients" value={formData.ingredients} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="nutritionInfo">Nutrition (raw)</label>
+                <textarea id="nutritionInfo" name="nutritionInfo" value={formData.nutritionInfo} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="packageSize">Package size / net weight</label>
+                <input id="packageSize" name="packageSize" type="text" value={formData.packageSize} onChange={handleChange} />
+              </div>
+            </>
+          )}
+
+          {/* First aid / meds */}
+          {formData.category === 'first-aid' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="manufacturer">Manufacturer</label>
+                <input id="manufacturer" name="manufacturer" type="text" value={formData.manufacturer} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label>
+                  <input type="checkbox" name="prescriptionRequired" checked={formData.prescriptionRequired} onChange={handleChange} /> Prescription required
+                </label>
+              </div>
+              <div className="form-group">
+                <label htmlFor="dosage">Dosage / Strength</label>
+                <input id="dosage" name="dosage" type="text" value={formData.dosage} onChange={handleChange} />
+              </div>
+            </>
+          )}
+
+          {/* Water / liquids */}
+          {formData.category === 'water' && (
+            <div className="form-group">
+              <label htmlFor="packageSize">Volume</label>
+              <input id="packageSize" name="packageSize" type="text" value={formData.packageSize} onChange={handleChange} />
+            </div>
+          )}
+
+          {/* Tools / batteries */}
+          {formData.category === 'tools' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="batteryChemistry">Battery type / chemistry</label>
+                <input id="batteryChemistry" name="batteryChemistry" type="text" value={formData.batteryChemistry} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="manufactureDate">Manufacture date</label>
+                <input id="manufactureDate" name="manufactureDate" type="date" value={formData.manufactureDate} onChange={handleChange} />
+              </div>
+            </>
+          )}
+
+          {/* General additional info */}
+          <div className="form-group">
+            <label htmlFor="countryOfOrigin">Country of origin</label>
+            <input id="countryOfOrigin" name="countryOfOrigin" type="text" value={formData.countryOfOrigin} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label htmlFor="storageInstructions">Storage instructions</label>
+            <input id="storageInstructions" name="storageInstructions" type="text" value={formData.storageInstructions} onChange={handleChange} />
+          </div>
 
           {/* Additional fields */}
           {renderField('storageLocation')}
@@ -399,6 +720,7 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
           {renderField('packaging')}
 
           {error && <div className="form-error">{error}</div>}
+          {lookupError && <div className="form-error">{lookupError}</div>}
 
           <div className="form-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
@@ -410,6 +732,7 @@ export default function InventoryForm({ onSave, onCancel, onOpenScanner, scanned
           </div>
         </form>
       </div>
+      <OpenFoodFactsSearchModal isOpen={ofModalOpen} onClose={() => setOfModalOpen(false)} onSelect={(p) => { applyOpenFoodFacts(p); setOfModalOpen(false) }} />
     </div>
   )
 }

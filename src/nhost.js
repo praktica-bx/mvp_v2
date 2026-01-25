@@ -707,4 +707,146 @@ export const renameHousehold = async (householdId, newName) => {
   }
 }
 
+/**
+ * Upsert a batch of inventory items to the server.
+ * Expects an array of objects matching the server inventory input shape.
+ */
+export const upsertInventoryBatch = async (items = []) => {
+  try {
+    await ensureNhostReady()
+
+    if (useLocalAuth) {
+      throw new Error('Nhost not configured: cannot upsert inventory in local mode')
+    }
+
+    if (!nhostClient) throw new Error('Nhost client not available')
+
+    const mutation = `
+      mutation UpsertInventory($objects: [inventory_insert_input!]!) {
+        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [product_id,quantity,expiry_date,added_at,updated_at,_deleted,allowGracePeriod,gracePeriodMonths,imageUrl] }) {
+          returning {
+            id
+            updated_at
+          }
+        }
+      }
+    `
+
+    const result = await nhostClient.graphql.request(mutation, { objects: items })
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to upsert inventory batch')
+    }
+
+    return result.data?.insert_inventory?.returning || []
+  } catch (err) {
+    console.error('[SYNC] upsertInventoryBatch error:', err)
+    throw err
+  }
+}
+
+/**
+ * Delete a batch of inventory records on the server by id
+ */
+export const deleteInventoryBatch = async (ids = []) => {
+  try {
+    await ensureNhostReady()
+
+    if (useLocalAuth) {
+      throw new Error('Nhost not configured: cannot delete inventory in local mode')
+    }
+
+    if (!nhostClient) throw new Error('Nhost client not available')
+
+    const mutation = `
+      mutation DeleteInventory($ids: [Int!]) {
+        delete_inventory(where: { id: { _in: $ids } }) {
+          affected_rows
+        }
+      }
+    `
+
+    const result = await nhostClient.graphql.request(mutation, { ids })
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to delete inventory batch')
+    }
+
+    return result.data?.delete_inventory || { affected_rows: 0 }
+  } catch (err) {
+    console.error('[SYNC] deleteInventoryBatch error:', err)
+    throw err
+  }
+}
+
+/**
+ * Get inventory rows changed since a timestamp (ISO string)
+ */
+export const getInventoryChangesSince = async (sinceISO, householdId) => {
+  try {
+    await ensureNhostReady()
+    if (useLocalAuth) return []
+    if (!nhostClient) throw new Error('Nhost client not available')
+
+    const query = `
+      query InventoryChanges($since: timestamptz!, $householdId: uuid!) {
+        inventory(where: { household_id: { _eq: $householdId }, updated_at: { _gt: $since } }) {
+          id
+          household_id
+          product_id
+          quantity
+          expiry_date
+          added_at
+          updated_at
+          _deleted
+          allowGracePeriod
+          gracePeriodMonths
+          imageUrl
+        }
+      }
+    `
+
+    const result = await nhostClient.graphql.request(query, { since: sinceISO, householdId })
+    if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch inventory changes')
+    return result.data?.inventory || []
+  } catch (err) {
+    console.error('[SYNC] getInventoryChangesSince error:', err)
+    throw err
+  }
+}
+
+/**
+ * Fetch a single inventory row by server id
+ */
+export const getInventoryById = async (id) => {
+  try {
+    await ensureNhostReady()
+    if (useLocalAuth) return null
+    if (!nhostClient) throw new Error('Nhost client not available')
+
+    const query = `
+      query GetInventoryById($id: Int!) {
+        inventory_by_pk(id: $id) {
+          id
+          household_id
+          product_id
+          quantity
+          expiry_date
+          added_at
+          updated_at
+          _deleted
+          allowGracePeriod
+          gracePeriodMonths
+          imageUrl
+        }
+      }
+    `
+
+    const result = await nhostClient.graphql.request(query, { id })
+    if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch inventory by id')
+    return result.data?.inventory_by_pk || null
+  } catch (err) {
+    console.error('[SYNC] getInventoryById error:', err)
+    throw err
+  }
+}
+
 export default nhostClient

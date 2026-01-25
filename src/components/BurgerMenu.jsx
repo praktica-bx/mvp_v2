@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Smartphone, Plus, Settings, X, LogOut, Home } from 'lucide-react';
+import { Smartphone, Plus, Settings, X, LogOut, Home, ChevronRight } from 'lucide-react';
 import { ThemeSwitcherFull } from './ThemeSwitcher';
 import './BurgerMenu.css';
 
@@ -50,98 +50,109 @@ export default function BurgerMenu({
       )}
 
       <nav className={`burger-menu ${isOpen ? 'open' : ''}`}>
-        {currentHousehold && (
-          <>
-            <div className="household-section">
-              <div className="household-header">Households</div>
+        {/* Quick Actions */}
+        <div className="menu-section quick-actions">
+          <div className="menu-section-header">Quick Actions</div>
+          <button className="menu-item" onClick={() => handleMenuClick(onScanBarcode)}>
+            <Smartphone size={20} style={{ marginRight: '0.5rem' }} />
+            Scan Barcode
+          </button>
+          <button className="menu-item" onClick={() => handleMenuClick(onAddManual)}>
+            <Plus size={20} style={{ marginRight: '0.5rem' }} />
+            Add Item Manually
+          </button>
+          <button className="menu-item disabled" aria-disabled="true">
+            <Plus size={20} style={{ marginRight: '0.5rem' }} />
+            Quick Inventory (coming soon)
+          </button>
+        </div>
 
-              {Array.isArray(households) && households.length > 0 ? (
-                households.map(h => (
-                  <div key={h.id} className={`household-row ${h.id === currentHousehold.id ? 'active' : ''}`}>
-                    <div className="household-name-small">{h.name}</div>
-                    <div className="household-actions">
-                      <button className="btn-link" onClick={() => { handleMenuClick(() => onSelectHousehold(h.id)) }}>
-                        Switch
-                      </button>
-                      <button className="btn-link" onClick={() => { handleMenuClick(() => onViewPreparedness(h)) }}>
-                        View preparedness
+        <div className="menu-divider"></div>
+
+        {/* Households */}
+        <div className="menu-section households">
+          <div className="menu-section-header">Households</div>
+
+          {currentHousehold ? (
+            <>
+              <div className="other-households">
+                {Array.isArray(households) && households.length > 0 ? (
+                  households.map(h => (
+                    <div key={h.id} className={`household-row ${h.id === currentHousehold.id ? 'active' : ''}`}>
+                      <button
+                        className="household-name-button"
+                        onClick={() => { onSelectHousehold(h.id) }}
+                        aria-pressed={h.id === currentHousehold.id}
+                      >
+                        <span className="household-name-text">{h.name}</span>
+                        <ChevronRight className="household-switch-icon" size={16} />
                       </button>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="household-subtitle">No households</div>
-              )}
+                  ))
+                ) : (
+                  <div className="household-subtitle">No households</div>
+                )}
+              </div>
 
-              <button 
-                className="menu-item household-item"
-                onClick={() => handleMenuClick(onShowHouseholdManagement)}
-              >
-                <Home size={40} style={{ marginRight: '0.5rem' }} />
-                <div className="household-info">
-                  <div className="household-name">{currentHousehold.name}</div>
-                  <div className="household-subtitle">Manage household</div>
-                </div>
-              </button>
-            </div>
-            <div className="menu-divider"></div>
-          </>
-        )}
+              <div className="household-actions-bottom">
+                <button className="menu-item" onClick={() => handleMenuClick(onShowHouseholdManagement)}>
+                  Manage / Create Households
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="household-subtitle">No household selected</div>
+          )}
+        </div>
 
-        <button 
-          className="menu-item"
-          onClick={() => handleMenuClick(onScanBarcode)}
-        >
-          <Smartphone size={20} style={{ marginRight: '0.5rem' }} />
-          Scan Barcode
-        </button>
-        <button 
-          className="menu-item"
-          onClick={() => handleMenuClick(onAddManual)}
-        >
-          <Plus size={20} style={{ marginRight: '0.5rem' }} />
-          Add Item Manually
-        </button>
-        <button 
-          className="menu-item"
-          onClick={() => handleMenuClick(onShowChecklist)}
-        >
-          <Settings size={20} style={{ marginRight: '0.5rem' }} />
-          Preparedness Checklist
-        </button>
-        <button 
-          className="menu-item"
-          onClick={() => handleMenuClick(onShowSettings)}
-        >
-          <Settings size={20} style={{ marginRight: '0.5rem' }} />
-          Settings
-        </button>
+        <div className="menu-divider"></div>
 
-        {user && (
-          <>
-            <div className="menu-divider"></div>
+        {/* Preparedness & Inventory */}
+        <div className="menu-section preparedness">
+          <div className="menu-section-header">Preparedness & Inventory</div>
+          <button className="menu-item" onClick={() => handleMenuClick(onShowChecklist)}>
+            <Settings size={20} style={{ marginRight: '0.5rem' }} />
+            Preparedness Checklist
+          </button>
+          <button className="menu-item" onClick={() => { handleMenuClick(() => onViewPreparedness(currentHousehold)) }} disabled={!currentHousehold}>
+            <Settings size={20} style={{ marginRight: '0.5rem' }} />
+            View Preparedness Summary
+          </button>
+          <button className="menu-item disabled" aria-disabled="true">
+            Export / Import (coming soon)
+          </button>
+        </div>
+
+        <div className="menu-divider"></div>
+
+        {/* Account & Settings */}
+        <div className="menu-section account">
+          <div className="menu-section-header">Account</div>
+          <button className="menu-item" onClick={() => handleMenuClick(onShowSettings)}>
+            <Settings size={20} style={{ marginRight: '0.5rem' }} />
+            Settings
+          </button>
+          {user && (
             <div className="user-section">
               <p className="user-email">{user.email}</p>
-              <button 
-                className="menu-item logout-item"
-                onClick={handleLogout}
-              >
+              <button className="menu-item logout-item" onClick={handleLogout}>
                 <LogOut size={20} style={{ marginRight: '0.5rem' }} />
                 Sign Out
               </button>
             </div>
-          </>
-        )}
+          )}
+        </div>
 
-        <button 
-          className="menu-item close-item"
-          onClick={() => setIsOpen(false)}
-        >
-          <X size={20} style={{ marginRight: '0.5rem' }} />
-          Close
-        </button>
-        
-        <ThemeSwitcherFull />
+        <div className="menu-divider"></div>
+
+        {/* Utilities / Help at bottom */}
+        <div className="menu-bottom">
+          <ThemeSwitcherFull />
+          <button className="menu-item" onClick={() => setIsOpen(false)}>
+            <X size={20} style={{ marginRight: '0.5rem' }} />
+            Close
+          </button>
+        </div>
       </nav>
     </>
   );
