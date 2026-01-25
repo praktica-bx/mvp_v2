@@ -1,5 +1,5 @@
-.conflict-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
-.conflict-modal{background:var(--color-bg,white);color:var(--color-text,#111);width:880px;max-width:95%;padding:16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2)}
+.conflict-modal-overlay{position:fixed;inset:0;background:var(--color-black-overlay45);display:flex;align-items:center;justify-content:center;z-index:1200}
+.conflict-modal{background:var(--color-bg,white);color:var(--color-text,#111);width:880px;max-width:95%;padding:16px;border-radius:8px;box-shadow:0 8px 24px var(--color-overlay-black20)}
 .conflict-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .conflict-compare{display:flex;gap:12px}
 .conflict-block{flex:1;background:var(--color-surface,#f7f7f7);padding:8px;border-radius:6px;max-height:320px;overflow:auto}
