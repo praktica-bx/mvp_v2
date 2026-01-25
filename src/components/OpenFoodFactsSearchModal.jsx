@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import './OpenFoodFactsSearchModal.css'
 import { searchProducts } from '../services/openFoodFacts'
 
@@ -7,6 +7,36 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState([])
   const [error, setError] = useState(null)
+
+  const modalRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    // focus the search input when modal opens
+    inputRef.current?.focus()
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'Tab') {
+        // simple focus trap
+        const focusable = modalRef.current.querySelectorAll('a[href], area, input, select, textarea, button, [tabindex]:not([tabindex="-1"])')
+        if (!focusable.length) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -26,14 +56,21 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
 
   return (
     <div className="off-modal-overlay" onClick={onClose}>
-      <div className="off-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="off-modal"
+        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="off-modal-title"
+      >
         <div className="off-header">
-          <h3>Search OpenFoodFacts</h3>
-          <button className="close" onClick={onClose}>✕</button>
+          <h3 id="off-modal-title">Search OpenFoodFacts</h3>
+          <button className="close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product name" />
+          <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product name" aria-label="Search product name" />
           <button className="btn btn-primary" onClick={doSearch} disabled={!query || loading}>{loading ? 'Searching…' : 'Search'}</button>
         </div>
 
