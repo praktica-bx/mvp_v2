@@ -34,34 +34,8 @@ export const CATEGORY_DEFAULTS = DEFAULT_CATEGORIES
  * Schema v3 includes sync tracking and enhanced fields
  */
 const initDB = async () => {
-  try {
-    return await openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion, transaction) {
-        console.log(`Upgrading database from v${oldVersion} to v${newVersion}`)
-
-        // Migration from v0 (no database) or v1 to current
-        if (oldVersion < 1) {
-          // Create products store
-          if (!db.objectStoreNames.contains('products')) {
-            const productStore = db.createObjectStore('products', {
-              keyPath: 'id',
-              autoIncrement: true,
-            })
-            productStore.createIndex('name', 'name', { unique: false })
-            productStore.createIndex('normalizedName', 'normalizedName', { unique: false })
-            productStore.createIndex('barcode', 'barcode', { unique: false })
-          }
-
-          // Create inventory store
-          if (!db.objectStoreNames.contains('inventory')) {
-            const inventoryStore = db.createObjectStore('inventory', {
-              keyPath: 'id',
-              autoIncrement: true,
-            })
-            inventoryStore.createIndex('productId', 'productId', { unique: false })
-            inventoryStore.createIndex('expiryDate', 'expiryDate', { unique: false })
-            inventoryStore.createIndex('category', 'category', { unique: false })
-          }
+  }
+}
 
           // Create settings store
           if (!db.objectStoreNames.contains('settings')) {
@@ -324,23 +298,7 @@ const initDB = async () => {
   }
 }
 
-/**
- * Run database migrations
- * Ensures database is at the current version
- */
-  } catch (err) {
-    console.error('Failed to open or upgrade database:', err)
-    // Provide a clearer hint for recovery steps
-    console.error('If this is a migration error you may need to clear the local IndexedDB database (via browser devtools) or bump the DB_VERSION after inspecting migrations.')
-    throw err
-  }
-    return { success: true, version: db.version }
-  } catch (error) {
-    console.error('Migration failed:', error)
-    return { success: false, error: error.message }
-  }
-}
-
+ 
 // Normalize text for matching (remove special chars, lowercase, trim)
 const normalizeText = (text) => {
   if (!text) return ''
