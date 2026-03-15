@@ -81,7 +81,14 @@ export default function BurgerMenu({
                     <div key={h.id} className={`household-row ${h.id === currentHousehold.id ? 'active' : ''}`}>
                       <button
                         className="household-name-button"
-                        onClick={() => { onSelectHousehold(h.id) }}
+                        onClick={() => {
+                          // If this is the active/selected household, open the Manage Households modal
+                          if (h.id === currentHousehold.id) {
+                            handleMenuClick(onShowHouseholdManagement)
+                          } else {
+                            handleMenuClick(() => onSelectHousehold(h.id))
+                          }
+                        }}
                         aria-pressed={h.id === currentHousehold.id}
                       >
                         <span className="household-name-text">{h.name}</span>
@@ -94,11 +101,6 @@ export default function BurgerMenu({
                 )}
               </div>
 
-              <div className="household-actions-bottom">
-                <button className="menu-item" onClick={() => handleMenuClick(onShowHouseholdManagement)}>
-                  Manage / Create Households
-                </button>
-              </div>
             </>
           ) : (
             <div className="household-subtitle">No household selected</div>

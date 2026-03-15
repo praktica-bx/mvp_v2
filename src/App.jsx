@@ -18,7 +18,7 @@ import useOnlineStatus from './hooks/useOnlineStatus'
 import useAuth from './hooks/useAuth'
 import useHousehold from './hooks/useHousehold'
 import { useTheme } from './hooks/useTheme'
-import { getInventoryStats, addInventoryItem, getPendingSyncs, syncToNhost, getInventoryByDsbCategory, fetchFromCloud } from './database'
+import { getInventoryStats, getPendingSyncs, getInventoryByDsbCategory, fetchFromCloud, syncToCloud } from './database'
 import { calculateDsbCompleteness } from './constants/dsb-baseline'
 
 export default function App() {
@@ -38,35 +38,7 @@ export default function App() {
   const [scannedBarcode, setScannedBarcode] = useState(null)
   const { isOnline } = useOnlineStatus()
   const [pendingSyncCount, setPendingSyncCount] = useState(0)
-  const [showSyncStatus, setShowSyncStatus] = useState(false)
-  // Check for pending syncs when coming online
-  useEffect(() => {
-    if (isOnline && currentHousehold) {
-      checkPendingSyncs()
-    }
-  }, [isOnline, currentHousehold])
-
-  // Load stats when household changes
-  useEffect(() => {
-    if (currentHousehold) {
-      loadStats()
-    }
-  }, [currentHousehold])
-
-  // On auth + household, fetch recent cloud changes (if configured)
-  useEffect(() => {
-    if (isAuthenticated && currentHousehold && nhostConfigured) {
-      (async () => {
-        try {
-          await fetchFromCloud(currentHousehold.id)
-          await loadStats()
-          checkPendingSyncs()
-        } catch (err) {
-          console.warn('Initial fetchFromCloud failed:', err)
-        }
-      })()
-    }
-  }, [isAuthenticated, currentHousehold, nhostConfigured])
+  // Check for pending syncs and load stats
 
   const checkPendingSyncs = async () => {
     try {
@@ -99,6 +71,51 @@ export default function App() {
       console.error('Error loading stats:', error)
     }
   }
+
+  useEffect(() => {
+    if (isOnline && currentHousehold) {
+      (async () => { await checkPendingSyncs() })()
+    }
+  }, [isOnline, currentHousehold])
+
+  useEffect(() => {
+    if (currentHousehold) {
+      (async () => { await loadStats() })()
+    }
+  }, [currentHousehold])
+
+  // On auth + household, fetch recent cloud changes (if configured)
+  useEffect(() => {
+    if (isAuthenticated && currentHousehold && nhostConfigured) {
+      let intervalId = null
+
+      const runSync = async () => {
+        try {
+          // First push local changes, then pull remote updates
+          await syncToCloud()
+        } catch (e) {
+          console.warn('Background push (syncToCloud) failed:', e)
+        }
+
+        try {
+          await fetchFromCloud(currentHousehold.id)
+          await loadStats()
+          checkPendingSyncs()
+        } catch (err) {
+          console.warn('Background fetchFromCloud failed:', err)
+        }
+      }
+
+      // Run immediately, then poll every 15s while active
+      runSync()
+      intervalId = setInterval(runSync, 15000)
+
+      return () => {
+        if (intervalId) clearInterval(intervalId)
+      }
+    }
+  }, [isAuthenticated, currentHousehold?.id, nhostConfigured, loadStats])
+
 
   const openPreparednessForHousehold = async (household) => {
     try {
@@ -266,7 +283,7 @@ export default function App() {
             <Settings onClose={() => setShowSettings(false)} />
           )}
 
-          {showHouseholdManagement && currentHousehold && (
+                {showHouseholdManagement && (
             <HouseholdManagement
               currentHousehold={currentHousehold}
               households={households}

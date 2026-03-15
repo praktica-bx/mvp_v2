@@ -6,6 +6,14 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
+  // Node scripts and generated files (allow `require`, `process`, etc.)
+  {
+    files: ['scripts/**', '*.cjs', 'served_db.js', 'temp_database.js'],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: { ecmaVersion: 'latest', sourceType: 'script' },
+    },
+  },
   {
     files: ['**/*.{js,jsx}'],
     extends: [

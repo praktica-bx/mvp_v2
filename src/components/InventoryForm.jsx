@@ -46,6 +46,16 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     dosage: '',
     batteryChemistry: '',
     manufactureDate: '',
+    batteryCapacity: '',
+    lumen: '',
+    caloriesPerServing: '',
+    servingsPerPackage: 0,
+    powerRating: '',
+    medicationForm: '',
+    documentsType: '',
+    specialNeedsDetails: '',
+    storageTemperature: '',
+    containerType: '',
     allowGracePeriod: false,
     gracePeriodMonths: 0,
   })
@@ -93,6 +103,16 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             packaging: local.packaging || '',
             allowGracePeriod: !!local.allowGracePeriod,
             gracePeriodMonths: local.gracePeriodMonths || 0,
+            batteryCapacity: local.batteryCapacity || local.battery_capacity || '',
+            lumen: local.lumen || '',
+            caloriesPerServing: local.caloriesPerServing || local.calories_per_serving || '',
+            servingsPerPackage: local.servingsPerPackage || local.servings_per_package || 0,
+            powerRating: local.powerRating || local.power_rating || '',
+            medicationForm: local.medicationForm || local.medication_form || '',
+            documentsType: local.documentsType || local.documents_type || '',
+            specialNeedsDetails: local.specialNeedsDetails || local.special_needs_details || '',
+            storageTemperature: local.storageTemperature || local.storage_temperature || '',
+            containerType: local.containerType || local.container_type || '',
           }))
         }
       } catch (err) {
@@ -246,6 +266,16 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       itemToSave.dosage = formData.dosage || null
       itemToSave.batteryChemistry = formData.batteryChemistry || null
       itemToSave.manufactureDate = formData.manufactureDate || null
+      itemToSave.batteryCapacity = formData.batteryCapacity || null
+      itemToSave.lumen = formData.lumen || null
+      itemToSave.caloriesPerServing = formData.caloriesPerServing || null
+      itemToSave.servingsPerPackage = formData.servingsPerPackage || null
+      itemToSave.powerRating = formData.powerRating || null
+      itemToSave.medicationForm = formData.medicationForm || null
+      itemToSave.documentsType = formData.documentsType || null
+      itemToSave.specialNeedsDetails = formData.specialNeedsDetails || null
+      itemToSave.storageTemperature = formData.storageTemperature || null
+      itemToSave.containerType = formData.containerType || null
 
       let savedId = null
       if (itemId) {
@@ -651,6 +681,14 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
                 <label htmlFor="packageSize">Package size / net weight</label>
                 <input id="packageSize" name="packageSize" type="text" value={formData.packageSize} onChange={handleChange} />
               </div>
+              <div className="form-group">
+                <label htmlFor="caloriesPerServing">Calories per serving</label>
+                <input id="caloriesPerServing" name="caloriesPerServing" type="number" value={formData.caloriesPerServing} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="servingsPerPackage">Servings per package</label>
+                <input id="servingsPerPackage" name="servingsPerPackage" type="number" value={formData.servingsPerPackage} onChange={handleChange} />
+              </div>
             </>
           )}
 
@@ -660,6 +698,10 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               <div className="form-group">
                 <label htmlFor="manufacturer">Manufacturer</label>
                 <input id="manufacturer" name="manufacturer" type="text" value={formData.manufacturer} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="medicationForm">Form (e.g., tablet, ointment)</label>
+                <input id="medicationForm" name="medicationForm" type="text" value={formData.medicationForm} onChange={handleChange} />
               </div>
               <div className="form-group">
                 <label>
@@ -681,12 +723,34 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           )}
 
+          {/* Light / lighting specific */}
+          {formData.category === 'light' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="lumen">Lumen (brightness)</label>
+                <input id="lumen" name="lumen" type="number" value={formData.lumen} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="batteryCapacity">Battery capacity (mAh) — if applicable</label>
+                <input id="batteryCapacity" name="batteryCapacity" type="number" value={formData.batteryCapacity} onChange={handleChange} />
+              </div>
+            </>
+          )}
+
           {/* Tools / batteries */}
           {formData.category === 'tools' && (
             <>
               <div className="form-group">
                 <label htmlFor="batteryChemistry">Battery type / chemistry</label>
                 <input id="batteryChemistry" name="batteryChemistry" type="text" value={formData.batteryChemistry} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="batteryCapacity">Battery capacity (mAh)</label>
+                <input id="batteryCapacity" name="batteryCapacity" type="number" value={formData.batteryCapacity} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="powerRating">Power rating (e.g., W/V)</label>
+                <input id="powerRating" name="powerRating" type="text" value={formData.powerRating} onChange={handleChange} />
               </div>
               <div className="form-group">
                 <label htmlFor="manufactureDate">Manufacture date</label>
@@ -704,6 +768,28 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             <label htmlFor="storageInstructions">Storage instructions</label>
             <input id="storageInstructions" name="storageInstructions" type="text" value={formData.storageInstructions} onChange={handleChange} />
           </div>
+
+          {/* Documents-specific */}
+          {formData.category === 'documents' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="documentsType">Document type</label>
+                <input id="documentsType" name="documentsType" type="text" value={formData.documentsType} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="containerType">Storage container</label>
+                <input id="containerType" name="containerType" type="text" value={formData.containerType} onChange={handleChange} />
+              </div>
+            </>
+          )}
+
+          {/* Special needs */}
+          {formData.category === 'special-needs' && (
+            <div className="form-group">
+              <label htmlFor="specialNeedsDetails">Details / instructions</label>
+              <textarea id="specialNeedsDetails" name="specialNeedsDetails" value={formData.specialNeedsDetails} onChange={handleChange} />
+            </div>
+          )}
 
           {/* Additional fields */}
           {renderField('storageLocation')}

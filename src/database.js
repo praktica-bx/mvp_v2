@@ -34,8 +34,34 @@ export const CATEGORY_DEFAULTS = DEFAULT_CATEGORIES
  * Schema v3 includes sync tracking and enhanced fields
  */
 const initDB = async () => {
-  }
-}
+  try {
+    return await openDB(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion, newVersion, transaction) {
+        console.log(`Upgrading database from v${oldVersion} to v${newVersion}`)
+
+        // Migration from v0 (no database) or v1 to current
+        if (oldVersion < 1) {
+          // Create products store
+          if (!db.objectStoreNames.contains('products')) {
+            const productStore = db.createObjectStore('products', {
+              keyPath: 'id',
+              autoIncrement: true,
+            })
+            productStore.createIndex('name', 'name', { unique: false })
+            productStore.createIndex('normalizedName', 'normalizedName', { unique: false })
+            productStore.createIndex('barcode', 'barcode', { unique: false })
+          }
+
+          // Create inventory store
+          if (!db.objectStoreNames.contains('inventory')) {
+            const inventoryStore = db.createObjectStore('inventory', {
+              keyPath: 'id',
+              autoIncrement: true,
+            })
+            inventoryStore.createIndex('productId', 'productId', { unique: false })
+            inventoryStore.createIndex('expiryDate', 'expiryDate', { unique: false })
+            inventoryStore.createIndex('category', 'category', { unique: false })
+          }
 
           // Create settings store
           if (!db.objectStoreNames.contains('settings')) {
@@ -939,6 +965,10 @@ export const upsertProduct = async (product) => {
  */
 export const addInventoryItem = async (item, householdId) => {
   try {
+    // Allow callers to pass household via second arg, or via item.household_id,
+    // or fall back to localStorage.currentHouseholdId for convenience in the UI.
+    householdId = householdId || item?.household_id || (typeof localStorage !== 'undefined' && localStorage.getItem('currentHouseholdId'))
+
     if (!householdId) {
       throw new Error('Household ID is required to add inventory items')
     }
@@ -1338,8 +1368,9 @@ export const getInventoryByDsbCategory = async (householdId) => {
     const inventory = await db.getAllFromIndex('inventory', 'household_id', householdId)
     const activeInventory = inventory.filter((item) => !item._deleted)
 
-    // Map supply categories to DSB categories
-    const { getDsbCategory } = require('./constants/categories')
+    // Map supply categories to DSB categories (use dynamic import in ESM/browser)
+    const _categoriesMod = await import('./constants/categories')
+    const getDsbCategory = _categoriesMod.getDsbCategory ?? (_categoriesMod.default && _categoriesMod.default.getDsbCategory) ?? _categoriesMod.default
 
     const categoryCounts = {
       water: 0,

@@ -1,0 +1,62 @@
+﻿{
+    "args":  {
+                 "permission":  {
+                                    "set":  {
+                                                "user_id":  "X-Hasura-User-Id"
+                                            },
+                                    "columns":  [
+                                                    "product_id",
+                                                    "barcode",
+                                                    "product_name",
+                                                    "quantity",
+                                                    "unit",
+                                                    "expiry_date",
+                                                    "purchase_date",
+                                                    "preferred_consumption_date",
+                                                    "storage_location",
+                                                    "item_status",
+                                                    "storage_notes",
+                                                    "allergens",
+                                                    "dietary_restrictions",
+                                                    "cost",
+                                                    "supplier",
+                                                    "lot_number",
+                                                    "nutrition_info",
+                                                    "priority_level",
+                                                    "packaging",
+                                                    "image_url",
+                                                    "allowGracePeriod",
+                                                    "gracePeriodMonths",
+                                                    "battery_capacity",
+                                                    "batteryCapacity",
+                                                    "lumen",
+                                                    "calories_per_serving",
+                                                    "caloriesPerServing",
+                                                    "servings_per_package",
+                                                    "servingsPerPackage",
+                                                    "power_rating",
+                                                    "powerRating",
+                                                    "medication_form",
+                                                    "medicationForm",
+                                                    "documents_type",
+                                                    "documentsType",
+                                                    "special_needs_details",
+                                                    "specialNeedsDetails",
+                                                    "storage_temperature",
+                                                    "storageTemperature",
+                                                    "container_type",
+                                                    "containerType",
+                                                    "_deleted"
+                                                ],
+                                    "check":  {
+
+                                              }
+                                },
+                 "table":  {
+                               "name":  "inventory",
+                               "schema":  "public"
+                           },
+                 "role":  "user"
+             },
+    "type":  "pg_update_insert_permission"
+}

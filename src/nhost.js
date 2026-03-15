@@ -8,9 +8,23 @@ import {
 } from './localAuth'
 
 let nhostClient = null
-let NHOST_SUBDOMAIN = import.meta.env.VITE_NHOST_SUBDOMAIN || 'localhost'
+// Prefer Vite env, but allow runtime override via window.__VITE_NHOST_SUBDOMAIN (useful for tests)
+let NHOST_SUBDOMAIN = (typeof window !== 'undefined' && window.__VITE_NHOST_SUBDOMAIN) ||
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_NHOST_SUBDOMAIN) ||
+  'localhost'
+let NHOST_REGION = (typeof window !== 'undefined' && window.__VITE_NHOST_REGION) || (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_NHOST_REGION) || 'us-east-1'
 let initPromise = null
 let useLocalAuth = NHOST_SUBDOMAIN === 'localhost'
+
+// Debug: log resolved environment values so we can diagnose why Nhost falls back to localhost
+try {
+  console.info('[AUTH DEBUG] window.__VITE_NHOST_SUBDOMAIN =', (typeof window !== 'undefined' && window.__VITE_NHOST_SUBDOMAIN))
+  console.info('[AUTH DEBUG] import.meta.env.VITE_NHOST_SUBDOMAIN =', (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_NHOST_SUBDOMAIN))
+  console.info('[AUTH DEBUG] Resolved NHOST_SUBDOMAIN =', NHOST_SUBDOMAIN)
+  console.info('[AUTH DEBUG] Resolved NHOST_REGION =', NHOST_REGION)
+} catch (e) {
+  // ignore in non-browser contexts
+}
 
 // Initialize Nhost client with proper async handling
 const initNhost = async () => {
@@ -20,21 +34,65 @@ const initNhost = async () => {
       return
     }
 
-    // Dynamic import to avoid hard dependency
+    // Dynamic import to avoid hard dependency and handle different export shapes
     try {
-      const { NhostClient } = await import('@nhost/nhost-js')
-      const NHOST_REGION = import.meta.env.VITE_NHOST_REGION || 'us-east-1'
+      const mod = await import('@nhost/nhost-js')
+      console.log('[AUTH] nhost module exports:', Object.keys(mod || {}).slice(0,10))
+      const NHOST_REGION = (typeof window !== 'undefined' && window.__VITE_NHOST_REGION) || (import.meta.env && import.meta.env.VITE_NHOST_REGION) || 'us-east-1'
 
-      nhostClient = new NhostClient({
-        subdomain: NHOST_SUBDOMAIN,
-        region: NHOST_REGION,
-        autoSignIn: false,
-        autoRefreshToken: true,
-      })
+      // Support named export `NhostClient`, factory helpers like `createNhostClient` or `createClient`,
+      // or a default export. Prefer factory helpers if present (modern package shape).
+      const clientFactory = mod.createNhostClient || mod.createClient || mod.NhostClient || (mod.default && (mod.default.createNhostClient || mod.default.createClient || mod.default.NhostClient || mod.default)) || null
+
+      if (!clientFactory) {
+        throw new Error('Nhost client constructor/factory not found in @nhost/nhost-js export')
+      }
+
+      // Try factory/callable first
+      try {
+        if (typeof clientFactory === 'function') {
+          // Some factories expect an options object
+          nhostClient = clientFactory({
+            subdomain: NHOST_SUBDOMAIN,
+            region: NHOST_REGION,
+            autoSignIn: false,
+            autoRefreshToken: true,
+          })
+        } else {
+          // Fallback: attempt to construct
+          nhostClient = new clientFactory({
+            subdomain: NHOST_SUBDOMAIN,
+            region: NHOST_REGION,
+            autoSignIn: false,
+            autoRefreshToken: true,
+          })
+        }
+      } catch (initErr) {
+        throw new Error('Failed to initialize Nhost client: ' + (initErr.message || initErr))
+      }
+
+      // Validate that the created client exposes auth methods we expect. If not, prefer local auth.
+      try {
+        const authKeys = nhostClient && nhostClient.auth ? Object.keys(nhostClient.auth) : []
+        const hasSignUp = authKeys.some(k => /sign.?up/i.test(k))
+        const hasSignIn = authKeys.some(k => /sign.?in/i.test(k))
+        if (!hasSignUp || !hasSignIn) {
+          console.warn('[AUTH] Nhost client created but missing expected auth methods, falling back to local auth. auth keys:', authKeys)
+          nhostClient = null
+          useLocalAuth = true
+          return
+        }
+      } catch (chkErr) {
+        console.warn('[AUTH] Error checking nhost client auth methods, falling back to local auth:', chkErr && chkErr.message ? chkErr.message : chkErr)
+        nhostClient = null
+        useLocalAuth = true
+        return
+      }
+
       useLocalAuth = false
       console.log('[AUTH] Nhost initialized successfully')
     } catch (importErr) {
-      console.warn('[AUTH] Nhost package not available, falling back to local auth:', importErr.message)
+      console.warn('[AUTH] Nhost package not available or init failed, falling back to local auth:', importErr && importErr.message ? importErr.message : importErr)
       useLocalAuth = true
     }
   } catch (err) {
@@ -96,16 +154,39 @@ export const signInWithNhost = async (email, password) => {
       return signInLocal(email, password)
     }
 
-    const { session, error } = await nhostClient.auth.signInWithEmail({
-      email,
-      password,
-    })
-
-    if (error) {
-      throw error
+    // Support multiple nhost client API shapes by trying known method names
+    const tryAuthMethods = async (methodNames, payload) => {
+      if (!nhostClient || !nhostClient.auth) throw new Error('Nhost client not available')
+      for (const name of methodNames) {
+        const fn = nhostClient.auth[name]
+        if (typeof fn === 'function') {
+          try {
+            const result = await fn.call(nhostClient.auth, payload)
+            return result
+          } catch (err) {
+            // If the method exists but errors, rethrow to allow outer catch to handle retries/logging
+            throw err
+          }
+        }
+      }
+      throw new Error('No supported sign-in method found on nhost client')
     }
 
-    return { session, error: null }
+    try {
+      const result = await tryAuthMethods(['signInWithEmail', 'signIn', 'signInWithPassword', 'signInWithEmailAndPassword'], { email, password })
+      // Normalize result: many nhost clients return { session, error }
+      if (result && result.error) {
+        throw result.error
+      }
+      const session = result && (result.session || result)
+      return { session, error: null }
+    } catch (err) {
+      if (err && /No supported sign-in method/i.test(err.message)) {
+        console.warn('[AUTH] Nhost client has no supported sign-in methods, falling back to local auth. Available auth keys:', nhostClient && nhostClient.auth ? Object.keys(nhostClient.auth) : null)
+        return signInLocal(email, password)
+      }
+      throw err
+    }
   } catch (error) {
     console.error('[AUTH] Sign in failed:', error)
     return { session: null, error }
@@ -128,16 +209,38 @@ export const signUpWithNhost = async (email, password) => {
       return signUpLocal(email, password)
     }
 
-    const { session, error } = await nhostClient.auth.signUpWithEmail({
-      email,
-      password,
-    })
-
-    if (error) {
-      throw error
+    // Try multiple possible sign-up method names across nhost client versions
+    const trySignUpMethods = async (methodNames, payload) => {
+      if (!nhostClient || !nhostClient.auth) throw new Error('Nhost client not available')
+      for (const name of methodNames) {
+        const fn = nhostClient.auth[name]
+        if (typeof fn === 'function') {
+          try {
+            const result = await fn.call(nhostClient.auth, payload)
+            return result
+          } catch (err) {
+            throw err
+          }
+        }
+      }
+      throw new Error('No supported sign-up method found on nhost client')
     }
 
-    return { session, error: null }
+    try {
+      const result = await trySignUpMethods(['signUpWithEmail', 'signUp', 'register', 'signUpWithEmailAndPassword'], { email, password })
+      if (result && result.error) {
+        throw result.error
+      }
+      const session = result && (result.session || result)
+      return { session, error: null }
+    } catch (err) {
+      // If the nhost client doesn't expose expected signup methods, fall back to local auth
+      if (err && /No supported sign-up method/i.test(err.message)) {
+        console.warn('[AUTH] Nhost client has no supported sign-up methods, falling back to local auth. Available auth keys:', nhostClient && nhostClient.auth ? Object.keys(nhostClient.auth) : null)
+        return signUpLocal(email, password)
+      }
+      throw err
+    }
   } catch (error) {
     console.error('[AUTH] Sign up failed:', error)
     return { session: null, error }
@@ -264,8 +367,11 @@ export const createHousehold = async (householdName) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(query, {
-      name: householdName,
+    const result = await nhostClient.graphql.request({
+      query,
+      variables: {
+        name: householdName,
+      },
     })
 
     if (result.errors) {
@@ -290,7 +396,33 @@ export const getUserHouseholds = async () => {
       // In local auth mode, get households from localStorage
       const households = JSON.parse(localStorage.getItem('households') || '[]')
       const currentUser = getCurrentUserLocal()
-      return households.filter(h => h.owner_id === currentUser?.id)
+      const userHouseholds = households.filter(h => h.owner_id === currentUser?.id)
+
+      // If no households exist for this local user, create a default one to simplify first-time setup
+      if ((!userHouseholds || userHouseholds.length === 0) && currentUser) {
+        const id = `household_${Date.now()}_${Math.random()}`
+        const newHousehold = {
+          id,
+          name: 'My Household',
+          created_at: new Date().toISOString(),
+          owner_id: currentUser.id,
+          household_members: [
+            {
+              id: `hm_${Date.now()}_${Math.random()}`,
+              user_id: currentUser.id,
+              household_id: id,
+              role: 'admin',
+              email: currentUser.email || null,
+              name: currentUser.username || null,
+            }
+          ]
+        }
+        households.push(newHousehold)
+        localStorage.setItem('households', JSON.stringify(households))
+        return [newHousehold]
+      }
+
+      return userHouseholds
     }
 
     if (!nhostClient) {
@@ -315,7 +447,7 @@ export const getUserHouseholds = async () => {
       }
     `
 
-    const result = await nhostClient.graphql.request(query)
+    const result = await nhostClient.graphql.request({ query })
 
     if (result.errors) {
       throw new Error(result.errors[0]?.message || 'Failed to fetch households')
@@ -360,9 +492,12 @@ export const inviteUserToHousehold = async (householdId, userEmail) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, {
-      householdId,
-      userEmail,
+    const result = await nhostClient.graphql.request({
+      query: mutation,
+      variables: {
+        householdId,
+        userEmail,
+      },
     })
 
     if (result.errors) {
@@ -408,9 +543,12 @@ export const removeHouseholdMember = async (householdId, memberId) => {
       }
     `
 
-    let result = await nhostClient.graphql.request(mutationById, {
-      memberId,
-      householdId,
+    let result = await nhostClient.graphql.request({
+      query: mutationById,
+      variables: {
+        memberId,
+        householdId,
+      },
     })
 
     if (result.errors) {
@@ -429,9 +567,12 @@ export const removeHouseholdMember = async (householdId, memberId) => {
       }
     `
 
-    result = await nhostClient.graphql.request(mutationByUser, {
-      userId: memberId,
-      householdId,
+    result = await nhostClient.graphql.request({
+      query: mutationByUser,
+      variables: {
+        userId: memberId,
+        householdId,
+      },
     })
 
     if (result.errors) {
@@ -539,8 +680,11 @@ export const leaveHousehold = async (householdId) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, {
-      householdId,
+    const result = await nhostClient.graphql.request({
+      query: mutation,
+      variables: {
+        householdId,
+      },
     })
 
     if (result.errors) {
@@ -590,8 +734,11 @@ export const deleteHousehold = async (householdId) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, {
-      householdId,
+    const result = await nhostClient.graphql.request({
+      query: mutation,
+      variables: {
+        householdId,
+      },
     })
 
     if (result.errors) {
@@ -709,9 +856,12 @@ export const renameHousehold = async (householdId, newName) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, {
-      householdId,
-      name: newName,
+    const result = await nhostClient.graphql.request({
+      query: mutation,
+      variables: {
+        householdId,
+        name: newName,
+      },
     })
 
     if (result.errors) {
@@ -750,7 +900,7 @@ export const upsertInventoryBatch = async (items = []) => {
       }
     `
 
-    const call = async () => await nhostClient.graphql.request(mutation, { objects: items })
+    const call = async () => await nhostClient.graphql.request({ query: mutation, variables: { objects: items } })
     const result = await retryRequest(call, { retries: 3, delay: 400 })
     if (result.errors) {
       const msg = result.errors[0]?.message || 'Failed to upsert inventory batch'
@@ -788,7 +938,7 @@ export const deleteInventoryBatch = async (ids = []) => {
       }
     `
 
-    const call = async () => await nhostClient.graphql.request(mutation, { ids })
+    const call = async () => await nhostClient.graphql.request({ query: mutation, variables: { ids } })
     const result = await retryRequest(call, { retries: 3, delay: 400 })
     if (result.errors) {
       console.error('[SYNC] deleteInventoryBatch graphql errors:', result.errors)
@@ -831,7 +981,7 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
       }
     `
 
-    const call = async () => await nhostClient.graphql.request(query, { since: sinceISO, householdId })
+    const call = async () => await nhostClient.graphql.request({ query, variables: { since: sinceISO, householdId } })
     const result = await retryRequest(call, { retries: 2, delay: 300 })
     if (result.errors) {
       console.error('[SYNC] getInventoryChangesSince graphql errors:', result.errors)
@@ -871,7 +1021,7 @@ export const getInventoryById = async (id) => {
       }
     `
 
-    const call = async () => await nhostClient.graphql.request(query, { id })
+    const call = async () => await nhostClient.graphql.request({ query, variables: { id } })
     const result = await retryRequest(call, { retries: 2, delay: 300 })
     if (result.errors) {
       console.error('[SYNC] getInventoryById graphql errors:', result.errors)
