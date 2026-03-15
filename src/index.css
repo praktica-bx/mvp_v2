@@ -50,6 +50,9 @@
   /* Semantic Colors */
   --color-warning: #f57c00;
   --color-success: #388e3c;
+
+  /* Shadow */
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, 0.07);
 }
 
 * {

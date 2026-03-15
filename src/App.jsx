@@ -187,7 +187,7 @@ export default function App() {
           <OfflineWarning isOnline={isOnline} />
 
           {isOfflineFallback && (
-            <div className="sync-reminder" style={{ background: 'var(--color-warning)', color: '#fff', borderColor: 'transparent' }}>
+            <div className="sync-reminder" style={{ background: 'var(--color-warning)', color: 'var(--color-white)', borderColor: 'transparent' }}>
               ⚠️ Cloud unreachable — showing cached data. Changes will sync when back online.
             </div>
           )}
