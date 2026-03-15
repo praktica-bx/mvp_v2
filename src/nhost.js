@@ -318,6 +318,37 @@ export const getNhostGraphQLClient = async () => {
 }
 
 /**
+ * Create a household in localStorage (offline / cloud-unreachable fallback)
+ * Tagged with _pendingSync so it gets pushed when the cloud comes back.
+ */
+const createHouseholdLocally = (householdName) => {
+  const user = getNhostUser() || {}
+  const ownerId = user.id || `local_${Date.now()}`
+  const id = `household_${Date.now()}_${Math.random().toString(36).slice(2)}`
+  const newHousehold = {
+    id,
+    name: householdName,
+    created_at: new Date().toISOString(),
+    owner_id: ownerId,
+    _pendingSync: true,
+    household_members: [
+      {
+        id: `hm_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        user_id: ownerId,
+        household_id: id,
+        role: 'admin',
+        email: user.email || null,
+        name: user.displayName || null,
+      },
+    ],
+  }
+  const existing = JSON.parse(localStorage.getItem('pendingHouseholds') || '[]')
+  existing.push(newHousehold)
+  localStorage.setItem('pendingHouseholds', JSON.stringify(existing))
+  return newHousehold
+}
+
+/**
  * Create a new household for the current user
  */
 export const createHousehold = async (householdName) => {
@@ -381,6 +412,13 @@ export const createHousehold = async (householdName) => {
     return result.data?.insert_households_one
   } catch (err) {
     console.error('[HOUSEHOLD] Error creating household:', err)
+    // If this is a network failure (cloud unreachable) fall back to a local household
+    // so the user is not blocked. It will be synced when the cloud comes back.
+    const isNetworkErr = err instanceof TypeError || (err.message && /network|fetch|cors|failed to fetch/i.test(err.message))
+    if (isNetworkErr) {
+      console.warn('[HOUSEHOLD] Network unreachable — creating household locally (will sync later)')
+      return createHouseholdLocally(householdName)
+    }
     throw err
   }
 }
@@ -453,9 +491,27 @@ export const getUserHouseholds = async () => {
       throw new Error(result.errors[0]?.message || 'Failed to fetch households')
     }
 
-    return result.data?.households || []
+    const cloudHouseholds = result.data?.households || []
+
+    // Merge in any households that were created locally while offline
+    // (those will be missing from the cloud until sync runs)
+    const pending = JSON.parse(localStorage.getItem('pendingHouseholds') || '[]')
+    const merged = [...cloudHouseholds]
+    for (const ph of pending) {
+      if (!merged.some((h) => h.id === ph.id)) {
+        merged.push(ph)
+      }
+    }
+
+    return merged
   } catch (err) {
     console.error('[HOUSEHOLD] Error fetching households:', err)
+    // On network failure, return locally-created pending households so user is not left empty
+    const pending = JSON.parse(localStorage.getItem('pendingHouseholds') || '[]')
+    if (pending.length > 0) {
+      console.warn('[HOUSEHOLD] Cloud unreachable \u2014 returning locally-pending households')
+      return pending
+    }
     return []
   }
 }

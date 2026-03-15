@@ -10,30 +10,50 @@ export function useHousehold() {
   const [currentHousehold, setCurrentHousehold] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isOfflineFallback, setIsOfflineFallback] = useState(false)
 
   // Load households on mount or when user changes
   useEffect(() => {
     const loadHouseholds = async () => {
       try {
         setIsLoading(true)
-        
+        setIsOfflineFallback(false)
+
         // Get user's households from Nhost
         const userHouseholds = await getUserHouseholds()
+        const savedHouseholdId = localStorage.getItem('currentHouseholdId')
+
+        // If cloud returned nothing but we have a locally cached copy, use it
+        // This keeps the app usable when Nhost is paused / unreachable
+        if ((!userHouseholds || userHouseholds.length === 0) && savedHouseholdId) {
+          const cachedRaw = localStorage.getItem('cachedHouseholds')
+          const cached = cachedRaw ? JSON.parse(cachedRaw) : null
+          if (cached && cached.length > 0) {
+            console.warn('[HOUSEHOLD] Cloud returned no households; using local cache (offline fallback)')
+            setHouseholds(cached)
+            const savedHousehold = cached.find(h => h.id === savedHouseholdId) || cached[0]
+            setCurrentHousehold(savedHousehold)
+            setIsOfflineFallback(true)
+            setError(null)
+            return
+          }
+        }
+
         setHouseholds(userHouseholds || [])
 
-        // Check if there's a saved current household in localStorage
-        const savedHouseholdId = localStorage.getItem('currentHouseholdId')
-        
+        // Persist to cache for offline fallback
+        if (userHouseholds && userHouseholds.length > 0) {
+          localStorage.setItem('cachedHouseholds', JSON.stringify(userHouseholds))
+        }
+
+        // Restore or select household
         if (savedHouseholdId && userHouseholds?.some(h => h.id === savedHouseholdId)) {
-          // Restore saved household
-          const household = userHouseholds.find(h => h.id === savedHouseholdId)
-          setCurrentHousehold(household)
+          setCurrentHousehold(userHouseholds.find(h => h.id === savedHouseholdId))
         } else if (userHouseholds && userHouseholds.length > 0) {
-          // Set first household as current
           setCurrentHousehold(userHouseholds[0])
           localStorage.setItem('currentHouseholdId', userHouseholds[0].id)
         }
-        
+
         setError(null)
       } catch (err) {
         console.error('[HOUSEHOLD] Error loading households:', err)
@@ -52,9 +72,11 @@ export function useHousehold() {
       const newHousehold = await createHousehold(householdName)
       
       if (newHousehold) {
-        setHouseholds(prev => [...prev, newHousehold])
+        const updated = [...households, newHousehold]
+        setHouseholds(updated)
         setCurrentHousehold(newHousehold)
         localStorage.setItem('currentHouseholdId', newHousehold.id)
+        localStorage.setItem('cachedHouseholds', JSON.stringify(updated))
         return { success: true, household: newHousehold }
       }
     } catch (err) {
@@ -236,6 +258,7 @@ export function useHousehold() {
     removeMember,
     hasHousehold: currentHousehold !== null,
     isFirstTime: !currentHousehold && households.length === 0,
+    isOfflineFallback,
   }
 }
 

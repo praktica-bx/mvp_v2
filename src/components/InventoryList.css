@@ -1,0 +1,243 @@
+.inventory-list {
+  margin-top: 1.5rem;
+}
+
+.inventory-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.inventory-list__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inventory-list__count {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.1em 0.55em;
+  line-height: 1.6;
+}
+
+.inventory-list__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.inventory-list__search {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+.inventory-list__controls-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.inventory-list__filter,
+.inventory-list__sort {
+  flex: 1;
+  padding: 0.5rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: var(--color-white);
+  color: var(--color-text-dark);
+}
+
+.inventory-list__loading,
+.inventory-list__empty {
+  text-align: center;
+  color: var(--color-text-light);
+  padding: 2rem 1rem;
+  font-size: 0.95rem;
+}
+
+.inventory-list__items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Item card */
+.inventory-item {
+  background: var(--color-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--color-border);
+  transition: box-shadow 0.15s;
+}
+
+.inventory-item:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.07);
+}
+
+.inventory-item--expired {
+  border-left-color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.inventory-item--soon {
+  border-left-color: var(--color-warning);
+}
+
+.inventory-item--ok {
+  border-left-color: var(--color-success);
+}
+
+.inventory-item--none {
+  border-left-color: var(--color-border);
+}
+
+.inventory-item__main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.inventory-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.inventory-item__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text-dark);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-item__brand {
+  font-size: 0.8rem;
+  color: var(--color-text-light);
+  display: block;
+  margin-top: 0.1rem;
+}
+
+.inventory-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.inventory-item__category,
+.inventory-item__qty,
+.inventory-item__location {
+  font-size: 0.78rem;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.inventory-item__location {
+  background: var(--color-bg-hover);
+  color: var(--color-text-medium);
+}
+
+.inventory-item__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.inventory-item__expiry {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inventory-item__expiry--expired {
+  color: var(--color-error);
+}
+
+.inventory-item__expiry--soon {
+  color: var(--color-warning);
+}
+
+.inventory-item__expiry--ok {
+  color: var(--color-success);
+}
+
+.inventory-item__expiry--none {
+  color: var(--color-text-light);
+}
+
+.inventory-item__actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.inventory-item__btn {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.35rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.inventory-item__btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.inventory-item__confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.inventory-item__confirm-text {
+  font-size: 0.8rem;
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.inventory-item__btn--confirm-yes {
+  background: var(--color-error);
+  color: var(--color-white);
+  border: none;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.inventory-item__btn--confirm-yes:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inventory-item__btn--confirm-no {
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+}

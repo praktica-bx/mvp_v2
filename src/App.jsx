@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import Dashboard from './components/Dashboard'
+import InventoryList from './components/InventoryList'
 import BarcodeScanner from './components/BarcodeScanner'
 import InventoryForm from './components/InventoryForm'
 import FieldPreferencesManager from './components/FieldPreferencesManager'
@@ -24,7 +25,7 @@ import { calculateDsbCompleteness } from './constants/dsb-baseline'
 export default function App() {
   useTheme() // Initialize theme system
   const { user, isAuthenticated, isLoading: authLoading, handleAuthSuccess, logout, nhostConfigured } = useAuth()
-  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime } = useHousehold()
+  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime, isOfflineFallback } = useHousehold()
   const [stats, setStats] = useState({ totalItems: 0, expiringSoon: 0, completeness: 0, inventoryByCategory: {} })
   const [showScanner, setShowScanner] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -36,6 +37,8 @@ export default function App() {
   const [preparednessHousehold, setPreparednessHousehold] = useState(null)
   const [preparednessStats, setPreparednessStats] = useState({ inventoryByCategory: {}, totalPersons: 1 })
   const [scannedBarcode, setScannedBarcode] = useState(null)
+  const [editingItemId, setEditingItemId] = useState(null)
+  const [listRefreshKey, setListRefreshKey] = useState(0)
   const { isOnline } = useOnlineStatus()
   const [pendingSyncCount, setPendingSyncCount] = useState(0)
   // Check for pending syncs and load stats
@@ -148,7 +151,9 @@ export default function App() {
 
   const handleInventoryAdded = async () => {
     await loadStats()
+    setListRefreshKey((k) => k + 1)
     setShowForm(false)
+    setEditingItemId(null)
   }
 
   return (
@@ -180,6 +185,12 @@ export default function App() {
       ) : (
         <>
           <OfflineWarning isOnline={isOnline} />
+
+          {isOfflineFallback && (
+            <div className="sync-reminder" style={{ background: 'var(--color-warning)', color: '#fff', borderColor: 'transparent' }}>
+              ⚠️ Cloud unreachable — showing cached data. Changes will sync when back online.
+            </div>
+          )}
           
           {pendingSyncCount > 0 && isOnline && (
             <div className="sync-reminder">
@@ -220,6 +231,19 @@ export default function App() {
                 ➕ Add Item Manually
               </button>
             </div>
+
+            <InventoryList
+              householdId={currentHousehold?.id}
+              refreshKey={listRefreshKey}
+              onEdit={(id) => {
+                setEditingItemId(id)
+                setShowForm(true)
+              }}
+              onDeleted={() => {
+                loadStats()
+                setListRefreshKey((k) => k + 1)
+              }}
+            />
           </main>
 
           {showScanner && (
@@ -232,16 +256,18 @@ export default function App() {
 
           {showForm && (
             <InventoryForm
+              itemId={editingItemId}
               onSave={handleInventoryAdded}
               onCancel={() => {
                 setShowForm(false)
                 setScannedBarcode(null)
+                setEditingItemId(null)
               }}
               onOpenScanner={() => {
                 setShowForm(false)
                 setShowScanner(true)
               }}
-              scannedBarcode={scannedBarcode}
+              scannedBarcode={editingItemId ? null : scannedBarcode}
               householdId={currentHousehold?.id}
               householdName={currentHousehold?.name}
               isOnline={isOnline}
