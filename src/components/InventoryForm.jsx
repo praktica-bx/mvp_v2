@@ -124,10 +124,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
 
   const { open: openConflictModal } = useConflictModal()
 
-  // Update barcode when scanned barcode changes
+  // Update barcode when scanned barcode changes and auto-lookup product
   useEffect(() => {
     if (scannedBarcode) {
       setFormData((prev) => ({ ...prev, barcode: scannedBarcode }))
+      doLookupBarcode(scannedBarcode)
     }
   }, [scannedBarcode])
 
