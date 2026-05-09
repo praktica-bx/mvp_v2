@@ -385,7 +385,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 id={fieldName}
                 type="text"
@@ -394,13 +394,15 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
                 onChange={handleChange}
                 placeholder="Enter or scan barcode"
                 required={config.mandatory}
-                style={{ flex: 1 }}
+                style={{ flex: 2, minWidth: 160, fontSize: '1.1em', letterSpacing: '0.08em' }}
+                autoComplete="off"
+                inputMode="numeric"
               />
-              <button type="button" className="btn btn-secondary" title="Scan barcode" onClick={onOpenScanner}>📷</button>
-              <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading}>
+              <button type="button" className="btn btn-secondary" title="Scan barcode" onClick={onOpenScanner} style={{ flex: 'none' }}>📷</button>
+              <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading} style={{ flex: 'none' }}>
                 {lookupLoading ? '…' : 'Lookup'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setOfModalOpen(true)}>
+              <button type="button" className="btn btn-secondary" onClick={() => setOfModalOpen(true)} style={{ flex: 'none' }}>
                 Search
               </button>
             </div>
