@@ -385,24 +385,24 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
+            <input
+              id={fieldName}
+              type="text"
+              name={fieldName}
+              value={value}
+              onChange={handleChange}
+              placeholder="Enter or scan barcode"
+              required={config.mandatory}
+              style={{ width: '100%', minWidth: 160, fontSize: '1.1em', letterSpacing: '0.08em', marginBottom: 8 }}
+              autoComplete="off"
+              inputMode="numeric"
+            />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                id={fieldName}
-                type="text"
-                name={fieldName}
-                value={value}
-                onChange={handleChange}
-                placeholder="Enter or scan barcode"
-                required={config.mandatory}
-                style={{ flex: 2, minWidth: 160, fontSize: '1.1em', letterSpacing: '0.08em' }}
-                autoComplete="off"
-                inputMode="numeric"
-              />
-              <button type="button" className="btn btn-secondary" title="Scan barcode" onClick={onOpenScanner} style={{ flex: 'none' }}>📷</button>
-              <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading} style={{ flex: 'none' }}>
+              <button type="button" className="btn btn-secondary" title="Scan barcode" onClick={onOpenScanner}>📷</button>
+              <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading}>
                 {lookupLoading ? '…' : 'Lookup'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setOfModalOpen(true)} style={{ flex: 'none' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setOfModalOpen(true)}>
                 Search
               </button>
             </div>
