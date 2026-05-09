@@ -13,7 +13,8 @@
     "csk": "npm run commit:skip-color -- --",
     "ci:color-check": "npm run lint:styles && npm run check:colors",
     "prepare": "husky install",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@nhost/nhost-js": "^4.2.2",
@@ -32,10 +33,12 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "gh-pages": "^6.3.0",
     "glob": "^10.4.0",
     "globals": "^16.5.0",
     "husky": "^8.0.0",
-    "vite": "npm:rolldown-vite@7.2.5"
+    "vite": "npm:rolldown-vite@7.2.5",
+    "vite-plugin-gh-pages": "^1.0.1"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@7.2.5"
