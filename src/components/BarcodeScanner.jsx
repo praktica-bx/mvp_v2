@@ -1,14 +1,45 @@
 
-import { useState, useRef } from 'react'
-import dynamic from 'next/dynamic'
-import { QrReader } from 'react-qr-barcode-scanner'
+import { useState, useRef, useEffect } from 'react'
+import { Html5QrcodeScanner } from 'html5-qrcode'
 
 export default function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }) {
 
   const [barcode, setBarcode] = useState('')
   const [isScanning, setIsScanning] = useState(true)
   const inputRef = useRef(null)
+  const scannerRef = useRef(null)
 
+
+  useEffect(() => {
+    if (isScanning && isOpen && scannerRef.current) {
+      // Clean up previous scanner if any
+      if (window.html5QrcodeScanner) {
+        window.html5QrcodeScanner.clear().catch(() => {})
+        window.html5QrcodeScanner = null
+      }
+      window.html5QrcodeScanner = new Html5QrcodeScanner(
+        scannerRef.current.id,
+        { fps: 10, qrbox: 250, formatsToSupport: ["EAN_13", "EAN_8", "UPC_A"] },
+        false
+      )
+      window.html5QrcodeScanner.render(
+        (decodedText) => {
+          setIsScanning(false)
+          setBarcode(decodedText)
+          onBarcodeDetected(decodedText)
+        },
+        (error) => {
+          // Optionally handle scan errors
+        }
+      )
+    }
+    return () => {
+      if (window.html5QrcodeScanner) {
+        window.html5QrcodeScanner.clear().catch(() => {})
+        window.html5QrcodeScanner = null
+      }
+    }
+  }, [isScanning, isOpen])
 
   if (!isOpen) return null
 
@@ -21,19 +52,6 @@ export default function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }) {
     }
   }
 
-  const handleScan = (result) => {
-    if (result && result.text) {
-      setIsScanning(false)
-      setBarcode(result.text)
-      onBarcodeDetected(result.text)
-    }
-  }
-
-  const handleError = (err) => {
-    // Optionally show error to user
-    setIsScanning(false)
-    // fallback to manual entry
-  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -44,12 +62,7 @@ export default function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }) {
         </div>
         {isScanning && (
           <div style={{ width: '100%', maxWidth: 400, margin: '0 auto' }}>
-            <QrReader
-              onResult={handleScan}
-              constraints={{ facingMode: 'environment' }}
-              style={{ width: '100%' }}
-              onError={handleError}
-            />
+            <div id="barcode-scanner" ref={scannerRef} style={{ width: '100%' }} />
             <button className="btn" style={{ marginTop: 8 }} onClick={() => setIsScanning(false)}>
               Cancel Camera
             </button>
