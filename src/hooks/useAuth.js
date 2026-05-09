@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getNhostUser, isNhostAuthenticated, signOutFromNhost, isNhostConfigured } from '../nhost'
+import { getNhostUser, isNhostAuthenticated, signOutFromNhost, isNhostConfigured, ensureNhostReady } from '../nhost'
 
 /**
  * Custom hook to manage authentication state
@@ -22,12 +22,15 @@ export function useAuth() {
           return
         }
 
+        // Wait for Nhost client to finish initializing (including session restore)
+        await ensureNhostReady()
+
         // Check if user is authenticated
         if (isNhostAuthenticated()) {
+          setIsAuthenticated(true)
           const currentUser = getNhostUser()
           if (currentUser) {
             setUser(currentUser)
-            setIsAuthenticated(true)
           }
         }
       } catch (err) {

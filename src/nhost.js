@@ -40,9 +40,9 @@ const initNhost = async () => {
       console.log('[AUTH] nhost module exports:', Object.keys(mod || {}).slice(0,10))
       const NHOST_REGION = (typeof window !== 'undefined' && window.__VITE_NHOST_REGION) || (import.meta.env && import.meta.env.VITE_NHOST_REGION) || 'us-east-1'
 
-      // Support named export `NhostClient`, factory helpers like `createNhostClient` or `createClient`,
-      // or a default export. Prefer factory helpers if present (modern package shape).
-      const clientFactory = mod.createNhostClient || mod.createClient || mod.NhostClient || (mod.default && (mod.default.createNhostClient || mod.default.createClient || mod.default.NhostClient || mod.default)) || null
+      // Prefer `createClient` over `createNhostClient` — createClient adds withClientSideSessionMiddleware
+      // which attaches the Bearer token to all requests and handles auto token refresh.
+      const clientFactory = mod.createClient || mod.createNhostClient || mod.NhostClient || (mod.default && (mod.default.createClient || mod.default.createNhostClient || mod.default.NhostClient || mod.default)) || null
 
       if (!clientFactory) {
         throw new Error('Nhost client constructor/factory not found in @nhost/nhost-js export')
@@ -55,16 +55,12 @@ const initNhost = async () => {
           nhostClient = clientFactory({
             subdomain: NHOST_SUBDOMAIN,
             region: NHOST_REGION,
-            autoSignIn: false,
-            autoRefreshToken: true,
           })
         } else {
           // Fallback: attempt to construct
           nhostClient = new clientFactory({
             subdomain: NHOST_SUBDOMAIN,
             region: NHOST_REGION,
-            autoSignIn: false,
-            autoRefreshToken: true,
           })
         }
       } catch (initErr) {
@@ -125,7 +121,7 @@ initPromise = initNhost()
 /**
  * Wait for Nhost initialization to complete
  */
-const ensureNhostReady = async () => {
+export const ensureNhostReady = async () => {
   if (initPromise) {
     await initPromise
   }
@@ -173,11 +169,20 @@ export const signInWithNhost = async (email, password) => {
     }
 
     try {
-      const result = await tryAuthMethods(['signInWithEmail', 'signIn', 'signInWithPassword', 'signInWithEmailAndPassword'], { email, password })
-      // Normalize result: many nhost clients return { session, error }
-      if (result && result.error) {
-        throw result.error
+      // v4 uses signInEmailPassword({ email, password }) → { body: { session, user }, status }
+      // v2/v3 used signInWithEmail/signIn → { session, error }
+      const result = await tryAuthMethods(['signInEmailPassword', 'signInWithEmail', 'signIn', 'signInWithPassword', 'signInWithEmailAndPassword'], { email, password })
+      // Normalize result across SDK versions
+      if (result && result.error) throw result.error
+      // v4 shape: { body: { session, user }, status }
+      if (result && result.body) {
+        const { session, user } = result.body
+        if (session) nhostClient.sessionStorage.set(session)
+        // Store user separately — sessionStorage only keeps token info and gets overwritten by refresh middleware
+        if (user) localStorage.setItem('nhostUser', JSON.stringify(user))
+        return { session: { ...session, user }, error: null }
       }
+      // v2/v3 shape: { session, ... }
       const session = result && (result.session || result)
       return { session, error: null }
     } catch (err) {
@@ -227,9 +232,16 @@ export const signUpWithNhost = async (email, password) => {
     }
 
     try {
-      const result = await trySignUpMethods(['signUpWithEmail', 'signUp', 'register', 'signUpWithEmailAndPassword'], { email, password })
-      if (result && result.error) {
-        throw result.error
+      // v4: signUpEmailPassword({ email, password }) → { body: { session, user }, status }
+      const result = await trySignUpMethods(['signUpEmailPassword', 'signUpWithEmail', 'signUp', 'register', 'signUpWithEmailAndPassword'], { email, password })
+      if (result && result.error) throw result.error
+      // v4 shape
+      if (result && result.body) {
+        const { session, user } = result.body
+        if (session) nhostClient.sessionStorage.set(session)
+        // Store user separately — survives token refreshes
+        if (user) localStorage.setItem('nhostUser', JSON.stringify(user))
+        return { session: { ...session, user }, error: null }
       }
       const session = result && (result.session || result)
       return { session, error: null }
@@ -262,7 +274,16 @@ export const signOutFromNhost = async () => {
       return signOutLocal()
     }
 
-    await nhostClient.auth.signOut()
+    // v4: signOut is a direct auth method, also clear session storage
+    if (typeof nhostClient.auth.signOut === 'function') {
+      try {
+        await nhostClient.auth.signOut()
+      } catch (e) {
+        console.warn('[AUTH] signOut request failed (ignoring):', e.message)
+      }
+    }
+    if (nhostClient.sessionStorage) nhostClient.sessionStorage.remove()
+    localStorage.removeItem('nhostUser')
     return { error: null }
   } catch (error) {
     console.error('[AUTH] Sign out failed:', error)
@@ -272,6 +293,7 @@ export const signOutFromNhost = async () => {
 
 /**
  * Get current user from Nhost or local auth
+ * In v4, user info is stored in a separate localStorage key after sign-in
  */
 export const getNhostUser = () => {
   if (useLocalAuth) {
@@ -279,11 +301,19 @@ export const getNhostUser = () => {
   }
 
   if (!nhostClient) return getCurrentUserLocal()
-  return nhostClient.auth.getUser()
+  // v4: user is stored separately in localStorage (sessionStorage only keeps tokens)
+  const session = nhostClient.sessionStorage ? nhostClient.sessionStorage.get() : null
+  if (!session) return null
+  try {
+    return JSON.parse(localStorage.getItem('nhostUser') || 'null')
+  } catch {
+    return null
+  }
 }
 
 /**
  * Get Nhost auth status
+ * In v4, isAuthenticated() doesn't exist — check sessionStorage instead
  */
 export const isNhostAuthenticated = () => {
   if (useLocalAuth) {
@@ -291,11 +321,18 @@ export const isNhostAuthenticated = () => {
   }
 
   if (!nhostClient) return isAuthenticatedLocal()
-  return nhostClient.auth.isAuthenticated()
+  // v4: check for a stored valid session
+  try {
+    const session = nhostClient.sessionStorage ? nhostClient.sessionStorage.get() : null
+    return session !== null && session !== undefined
+  } catch {
+    return false
+  }
 }
 
 /**
  * Get Nhost session
+ * In v4, the session is stored in sessionStorage
  */
 export const getNhostSession = () => {
   if (useLocalAuth) {
@@ -303,7 +340,7 @@ export const getNhostSession = () => {
   }
 
   if (!nhostClient) return getCurrentSessionLocal()
-  return nhostClient.auth.getSession()
+  return nhostClient.sessionStorage ? nhostClient.sessionStorage.get() : null
 }
 
 /**
@@ -409,7 +446,7 @@ export const createHousehold = async (householdName) => {
       throw new Error(result.errors[0]?.message || 'Failed to create household')
     }
 
-    return result.data?.insert_households_one
+    return (result.body || result).data?.insert_households_one
   } catch (err) {
     console.error('[HOUSEHOLD] Error creating household:', err)
     // If this is a network failure (cloud unreachable) fall back to a local household
@@ -491,11 +528,13 @@ export const getUserHouseholds = async () => {
       throw new Error(result.errors[0]?.message || 'Failed to fetch households')
     }
 
-    const cloudHouseholds = result.data?.households || []
+    const cloudHouseholds = (result.body || result).data?.households || []
 
     // Merge in any households that were created locally while offline
     // (those will be missing from the cloud until sync runs)
-    const pending = JSON.parse(localStorage.getItem('pendingHouseholds') || '[]')
+    // Only include pending households with valid UUIDs — legacy local-only IDs are not cloud-compatible
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const pending = JSON.parse(localStorage.getItem('pendingHouseholds') || '[]').filter(h => UUID_RE.test(h.id))
     const merged = [...cloudHouseholds]
     for (const ph of pending) {
       if (!merged.some((h) => h.id === ph.id)) {
@@ -560,7 +599,7 @@ export const inviteUserToHousehold = async (householdId, userEmail) => {
       throw new Error(result.errors[0]?.message || 'Failed to invite user')
     }
 
-    return result.data?.insert_household_invitations_one
+    return (result.body || result).data?.insert_household_invitations_one
   } catch (err) {
     console.error('[HOUSEHOLD] Error inviting user:', err)
     throw err
@@ -611,7 +650,7 @@ export const removeHouseholdMember = async (householdId, memberId) => {
       // continue to try by user_id fallback
     }
 
-    const affected = result.data?.delete_household_members?.affected_rows || 0
+    const affected = (result.body || result).data?.delete_household_members?.affected_rows || 0
     if (affected > 0) return { success: true }
 
     // Fallback: try delete by user_id
@@ -635,7 +674,7 @@ export const removeHouseholdMember = async (householdId, memberId) => {
       throw new Error(result.errors[0]?.message || 'Failed to remove member')
     }
 
-    return { success: (result.data?.delete_household_members?.affected_rows || 0) > 0 }
+    return { success: ((result.body || result).data?.delete_household_members?.affected_rows || 0) > 0 }
   } catch (err) {
     console.error('[HOUSEHOLD] Error removing household member:', err)
     throw err
@@ -688,15 +727,13 @@ export const joinHouseholdByCode = async (inviteCode) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(mutation, {
-      inviteCode,
-    })
+    const result = await nhostClient.graphql.request({ query: mutation, variables: { inviteCode } })
 
     if (result.errors) {
       throw new Error(result.errors[0]?.message || 'Failed to join household')
     }
 
-    return result.data?.joinHouseholdByCode?.household
+    return (result.body || result).data?.joinHouseholdByCode?.household
   } catch (err) {
     console.error('[HOUSEHOLD] Error joining household:', err)
     throw err
@@ -844,15 +881,13 @@ export const getHouseholdInviteCode = async (householdId) => {
       }
     `
 
-    const result = await nhostClient.graphql.request(query, {
-      householdId,
-    })
+    const result = await nhostClient.graphql.request({ query, variables: { householdId } })
 
     if (result.errors) {
       throw new Error(result.errors[0]?.message || 'Failed to get invite code')
     }
 
-    return result.data?.households_by_pk?.invite_code
+    return (result.body || result).data?.households_by_pk?.invite_code
   } catch (err) {
     console.error('[HOUSEHOLD] Error getting invite code:', err)
     throw err
@@ -924,7 +959,7 @@ export const renameHousehold = async (householdId, newName) => {
       throw new Error(result.errors[0]?.message || 'Failed to rename household')
     }
 
-    return result.data?.update_households?.returning?.[0]
+    return (result.body || result).data?.update_households?.returning?.[0]
   } catch (err) {
     console.error('[HOUSEHOLD] Error renaming household:', err)
     throw err
@@ -947,7 +982,7 @@ export const upsertInventoryBatch = async (items = []) => {
 
     const mutation = `
       mutation UpsertInventory($objects: [inventory_insert_input!]!) {
-        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [product_id,quantity,expiry_date,added_at,updated_at,_deleted,allowGracePeriod,gracePeriodMonths,imageUrl] }) {
+        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [product_name,product_id,quantity,unit,expiry_date,added_at,updated_at,storage_location,_deleted,allowGracePeriod,gracePeriodMonths,image_url] }) {
           returning {
             id
             updated_at
@@ -964,7 +999,7 @@ export const upsertInventoryBatch = async (items = []) => {
       throw new Error(msg)
     }
 
-    const returning = result.data?.insert_inventory?.returning || []
+    const returning = (result.body || result).data?.insert_inventory?.returning || []
     console.log(`[SYNC] upsertInventoryBatch: requested=${items.length} returned=${returning.length}`)
     return returning
   } catch (err) {
@@ -987,7 +1022,7 @@ export const deleteInventoryBatch = async (ids = []) => {
     if (!nhostClient) throw new Error('Nhost client not available')
 
     const mutation = `
-      mutation DeleteInventory($ids: [Int!]) {
+      mutation DeleteInventory($ids: [uuid!]) {
         delete_inventory(where: { id: { _in: $ids } }) {
           affected_rows
         }
@@ -1001,7 +1036,7 @@ export const deleteInventoryBatch = async (ids = []) => {
       throw new Error(result.errors[0]?.message || 'Failed to delete inventory batch')
     }
 
-    const data = result.data?.delete_inventory || { affected_rows: 0 }
+    const data = (result.body || result).data?.delete_inventory || { affected_rows: 0 }
     console.log(`[SYNC] deleteInventoryBatch: requested=${ids.length} affected=${data.affected_rows || 0}`)
     return data
   } catch (err) {
@@ -1018,6 +1053,12 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
     await ensureNhostReady()
     if (useLocalAuth) return []
     if (!nhostClient) throw new Error('Nhost client not available')
+    // Skip if householdId is not a valid UUID (e.g. legacy locally-generated ID)
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!householdId || !UUID_RE.test(householdId)) {
+      console.warn('[SYNC] Skipping getInventoryChangesSince — householdId is not a UUID:', householdId)
+      return []
+    }
 
     const query = `
       query InventoryChanges($since: timestamptz!, $householdId: uuid!) {
@@ -1025,14 +1066,17 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
           id
           household_id
           product_id
+          product_name
           quantity
+          unit
           expiry_date
+          storage_location
           added_at
           updated_at
           _deleted
           allowGracePeriod
           gracePeriodMonths
-          imageUrl
+          image_url
         }
       }
     `
@@ -1043,7 +1087,7 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
       console.error('[SYNC] getInventoryChangesSince graphql errors:', result.errors)
       throw new Error(result.errors[0]?.message || 'Failed to fetch inventory changes')
     }
-    return result.data?.inventory || []
+    return (result.body || result).data?.inventory || []
   } catch (err) {
     console.error('[SYNC] getInventoryChangesSince error:', err)
     throw err
@@ -1083,7 +1127,7 @@ export const getInventoryById = async (id) => {
       console.error('[SYNC] getInventoryById graphql errors:', result.errors)
       throw new Error(result.errors[0]?.message || 'Failed to fetch inventory by id')
     }
-    return result.data?.inventory_by_pk || null
+    return (result.body || result).data?.inventory_by_pk || null
   } catch (err) {
     console.error('[SYNC] getInventoryById error:', err)
     throw err

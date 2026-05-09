@@ -390,6 +390,7 @@ export const trackChange = async (table, recordId, operation) => {
       synced: false,
     })
     await tx.done
+    console.log(`[SYNC] trackChange: logged ${operation} on ${table}/${recordId}`)
   } catch (error) {
     console.error('Failed to track change:', error)
     // Don't throw - tracking failure shouldn't break the operation
@@ -406,10 +407,9 @@ export const getPendingChanges = async () => {
   try {
     const db = await initDB()
     const tx = db.transaction(['sync_log', 'products', 'inventory', 'settings'], 'readonly')
-    const index = tx.objectStore('sync_log').index('synced')
-    // IndexedDB keys do not support booleans as query values in all browsers.
-    // Fetch all logs from the index and filter unsynced changes client-side.
-    const allLogs = await index.getAll()
+    // Boolean values are not valid IndexedDB key types and are excluded from indexes.
+    // Read ALL records directly from the store and filter in JS.
+    const allLogs = await tx.objectStore('sync_log').getAll()
     const logs = allLogs.filter((log) => log && log.synced === false)
 
     // Fetch actual data for each change
@@ -977,6 +977,7 @@ export const addInventoryItem = async (item, householdId) => {
     const now = new Date().toISOString()
 
     const itemData = {
+      id: item.id || crypto.randomUUID(),  // UUID so local and server IDs match
       ...item,
       household_id: householdId,
       addedAt: now,
@@ -987,11 +988,18 @@ export const addInventoryItem = async (item, householdId) => {
     }
 
     const tx = db.transaction('inventory', 'readwrite')
-    const id = await tx.store.add(itemData)
+    const id = await tx.store.put(itemData)  // put preserves the pre-set UUID
     await tx.done
 
     // Track change for sync
     await trackChange('inventory', id, 'create')
+
+    // Trigger immediate background sync (best-effort)
+    try {
+      syncToCloud().catch((e) => console.warn('[SYNC] Background sync after add failed:', e.message || e))
+    } catch (e) {
+      console.warn('[SYNC] Failed to trigger background sync:', e.message || e)
+    }
 
     return id
   } catch (error) {
@@ -1154,11 +1162,17 @@ export const updateInventoryItem = async (id, updates) => {
  */
 export const syncToCloud = async () => {
   try {
-    if (!isNhostConfigured() || !isNhostAuthenticated()) {
-      return { success: false, reason: 'Not configured or not authenticated' }
+    if (!isNhostConfigured()) {
+      console.warn('[SYNC] Skipping — Nhost not configured')
+      return { success: false, reason: 'Not configured' }
+    }
+    if (!isNhostAuthenticated()) {
+      console.warn('[SYNC] Skipping — not authenticated (session missing or expired)')
+      return { success: false, reason: 'Not authenticated' }
     }
 
     const pending = await getPendingChanges()
+    console.log(`[SYNC] syncToCloud: ${pending?.length || 0} pending change(s)`)
     if (!pending || pending.length === 0) return { success: true, synced: 0 }
 
     // Group inventory changes
@@ -1171,19 +1185,31 @@ export const syncToCloud = async () => {
       if (change.operation === 'delete') {
         inventoryDeletes.push(change.recordId)
       } else if (change.data) {
-        // Map local data to a server-friendly shape. Server schema may need to accept these fields.
+        const hid = change.data.household_id
+        // Skip items with non-UUID household_id — they were created in offline-local mode
+        // and can't be stored in the cloud until a proper household is created
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (!hid || !UUID_RE.test(hid)) {
+          console.warn('[SYNC] Skipping inventory item — household_id is not a UUID:', hid)
+          continue
+        }
         const obj = {
           id: change.data.id,
-          household_id: change.data.household_id,
-          product_id: change.data.productId || null,
+          household_id: hid,
+          product_name: change.data.productName || change.data.product_name || null,
+          product_id: change.data.productId || change.data.product_id || null,
           quantity: change.data.quantity || null,
-          expiry_date: change.data.expiryDate || null,
-          added_at: change.data.addedAt || null,
+          unit: change.data.unit || null,
+          expiry_date: change.data.expiryDate || change.data.expiry_date || null,
+          added_at: change.data.addedAt || change.data.added_at || null,
+          updated_at: new Date().toISOString(),
+          storage_location: change.data.storageLocation || change.data.storage_location || null,
           _deleted: !!change.data._deleted,
           allowGracePeriod: !!change.data.allowGracePeriod,
           gracePeriodMonths: change.data.gracePeriodMonths || null,
-          imageUrl: change.data.imageUrl || null,
+          image_url: change.data.imageUrl || change.data.image_url || null,
         }
+        console.log('[SYNC] Queued upsert for item:', obj.id, '| household:', obj.household_id)
         inventoryUpserts.push(obj)
       }
     }
@@ -1195,6 +1221,7 @@ export const syncToCloud = async () => {
       try {
         const res = await upsertInventoryBatch(inventoryUpserts)
         const returnedIds = (res || []).map((r) => r.id).filter(Boolean)
+        console.log(`[SYNC] Upsert returned ${returnedIds.length} id(s):`, returnedIds)
         syncedCount += returnedIds.length
         // Mark local logs as synced only for returned ids
         for (const id of returnedIds) {
@@ -1931,8 +1958,11 @@ export const fetchFromCloud = async (householdId) => {
         id: row.id,
         household_id: row.household_id,
         productId: row.product_id || null,
+        productName: row.product_name || null,
         quantity: row.quantity || null,
+        unit: row.unit || null,
         expiryDate: row.expiry_date || null,
+        storageLocation: row.storage_location || null,
         addedAt: row.added_at || new Date().toISOString(),
         lastCheckedAt: row.updated_at || new Date().toISOString(),
         notificationSent: false,
@@ -1940,7 +1970,8 @@ export const fetchFromCloud = async (householdId) => {
         _deleted: !!row._deleted,
         allowGracePeriod: !!row.allowGracePeriod,
         gracePeriodMonths: row.gracePeriodMonths || null,
-        imageUrl: row.imageUrl || null,
+        image_url: row.image_url || null,
+        imageUrl: row.image_url || row.imageUrl || null,
       }
 
       await tx.store.put({ ...existing, ...toPut })

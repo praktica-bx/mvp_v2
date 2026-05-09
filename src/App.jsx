@@ -25,7 +25,7 @@ import { calculateDsbCompleteness } from './constants/dsb-baseline'
 export default function App() {
   useTheme() // Initialize theme system
   const { user, isAuthenticated, isLoading: authLoading, handleAuthSuccess, logout, nhostConfigured } = useAuth()
-  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime, isOfflineFallback } = useHousehold()
+  const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime, isOfflineFallback } = useHousehold({ isAuthenticated })
   const [stats, setStats] = useState({ totalItems: 0, expiringSoon: 0, completeness: 0, inventoryByCategory: {} })
   const [showScanner, setShowScanner] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -94,16 +94,31 @@ export default function App() {
 
       const runSync = async () => {
         try {
-          // First push local changes, then pull remote updates
           await syncToCloud()
         } catch (e) {
           console.warn('Background push (syncToCloud) failed:', e)
         }
 
         try {
-          await fetchFromCloud(currentHousehold.id)
-          await loadStats()
-          checkPendingSyncs()
+          const cloudResult = await fetchFromCloud(currentHousehold.id)
+          // Re-load stats inline to avoid stale closure / re-render loop
+          const inventoryStats = await getInventoryStats(currentHousehold.id)
+          const inventoryByCategory = await getInventoryByDsbCategory(currentHousehold.id)
+          const householdMembers = parseInt(
+            localStorage.getItem(`household:${currentHousehold.id}:members`) || localStorage.getItem('household-members') || '1'
+          )
+          const contingencyPersons = parseInt(
+            localStorage.getItem(`household:${currentHousehold.id}:contingency`) || localStorage.getItem('contingency-persons') || '0'
+          )
+          const totalPersons = householdMembers + contingencyPersons
+          const completeness = calculateDsbCompleteness(inventoryByCategory)
+          setStats({ ...inventoryStats, completeness, householdMembers, contingencyPersons, totalPersons, inventoryByCategory })
+          const pending = await getPendingSyncs()
+          setPendingSyncCount(pending.length)
+          // Refresh the inventory list if new items were pulled from the cloud
+          if (cloudResult?.applied > 0) {
+            setListRefreshKey((k) => k + 1)
+          }
         } catch (err) {
           console.warn('Background fetchFromCloud failed:', err)
         }
@@ -117,7 +132,8 @@ export default function App() {
         if (intervalId) clearInterval(intervalId)
       }
     }
-  }, [isAuthenticated, currentHousehold?.id, nhostConfigured, loadStats])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentHousehold?.id, nhostConfigured])
 
 
   const openPreparednessForHousehold = async (household) => {

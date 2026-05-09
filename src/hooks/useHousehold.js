@@ -5,15 +5,19 @@ import { createHousehold, getUserHouseholds, joinHouseholdByCode, leaveHousehold
  * Custom hook to manage household selection and operations
  * Handles: listing user's households, creating new ones, switching between them
  */
-export function useHousehold() {
+export function useHousehold({ isAuthenticated = false } = {}) {
   const [households, setHouseholds] = useState([])
   const [currentHousehold, setCurrentHousehold] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isOfflineFallback, setIsOfflineFallback] = useState(false)
 
-  // Load households on mount or when user changes
+  // Load households only after authentication is confirmed
   useEffect(() => {
+    if (!isAuthenticated) {
+      setIsLoading(false)
+      return
+    }
     const loadHouseholds = async () => {
       try {
         setIsLoading(true)
@@ -21,7 +25,25 @@ export function useHousehold() {
 
         // Get user's households from Nhost
         const userHouseholds = await getUserHouseholds()
-        const savedHouseholdId = localStorage.getItem('currentHouseholdId')
+        const rawSavedId = localStorage.getItem('currentHouseholdId')
+        // Discard legacy locally-generated IDs (not valid UUIDs) — they can't be used with cloud
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (rawSavedId && !UUID_RE.test(rawSavedId)) {
+          localStorage.removeItem('currentHouseholdId')
+          localStorage.removeItem('cachedHouseholds')
+        }
+        // Also purge any non-UUID entries from pendingHouseholds
+        try {
+          const pendingRaw = localStorage.getItem('pendingHouseholds')
+          if (pendingRaw) {
+            const pending = JSON.parse(pendingRaw)
+            const cleaned = pending.filter(h => UUID_RE.test(h.id))
+            if (cleaned.length !== pending.length) {
+              localStorage.setItem('pendingHouseholds', JSON.stringify(cleaned))
+            }
+          }
+        } catch { localStorage.removeItem('pendingHouseholds') }
+        const savedHouseholdId = UUID_RE.test(rawSavedId) ? rawSavedId : null
 
         // If cloud returned nothing but we have a locally cached copy, use it
         // This keeps the app usable when Nhost is paused / unreachable
@@ -64,7 +86,7 @@ export function useHousehold() {
     }
 
     loadHouseholds()
-  }, [])
+  }, [isAuthenticated])
 
   const createNewHousehold = async (householdName) => {
     try {

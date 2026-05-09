@@ -81,16 +81,16 @@ export default function LoginScreen({ onAuthSuccess }) {
           </div>
 
           <div className="form-group">
-            <label htmlFor="usernameOrEmail">Username or Email</label>
+            <label htmlFor="usernameOrEmail">Email</label>
             <input
               id="usernameOrEmail"
-              type="text"
+              type="email"
               value={usernameOrEmail}
               onChange={(e) => setUsernameOrEmail(e.target.value)}
-              placeholder={mode === 'signup' ? 'choose a username or use your email' : 'username or your@email.com'}
+              placeholder="your@email.com"
               required
               disabled={loading}
-              autoComplete="username"
+              autoComplete="email"
             />
           </div>
 
