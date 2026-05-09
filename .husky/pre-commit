@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running color token check..."
+if [ "x$SKIP_COLOR_CHECK" = "x1" ]; then
+  echo "SKIP_COLOR_CHECK=1 — skipping color token check."
+else
+  echo "Running color token check..."
+  npm run check:colors || {
+    echo "Color token checks failed — aborting commit." >&2
+    exit 1
+  }
+  echo "Color token check passed."
+fi
