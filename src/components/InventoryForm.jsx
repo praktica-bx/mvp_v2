@@ -392,11 +392,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
                 name={fieldName}
                 value={value}
                 onChange={handleChange}
-                onClick={onOpenScanner}
-                placeholder="Click to scan or enter barcode"
+                placeholder="Enter or scan barcode"
                 required={config.mandatory}
                 style={{ flex: 1 }}
               />
+              <button type="button" className="btn btn-secondary" title="Scan barcode" onClick={onOpenScanner}>📷</button>
               <button type="button" className="btn btn-secondary" onClick={() => doLookupBarcode(value)} disabled={!value || lookupLoading}>
                 {lookupLoading ? '…' : 'Lookup'}
               </button>
