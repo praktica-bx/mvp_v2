@@ -107,7 +107,7 @@ export default function BarcodeScanner({ isOpen, onClose, onBarcodeDetected }) {
         </button>
 
         {error && (
-          <p style={{ color: '#fff', background: '#c0392b', borderRadius: 6, padding: '8px 12px', marginBottom: 8, fontSize: '0.9em' }}>
+          <p style={{ color: 'var(--color-white)', background: 'var(--color-danger, #c0392b)', borderRadius: 6, padding: '8px 12px', marginBottom: 8, fontSize: '0.9em' }}>
             ❌ {error}
           </p>
         )}
