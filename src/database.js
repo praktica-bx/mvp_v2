@@ -326,7 +326,49 @@ const initDB = async () => {
   }
 }
 
- 
+
+// ============================================================================
+// EXPIRY DATE CONVERSION HELPERS
+// The local format is MM.YYYY (stored as text in IDB).
+// The cloud column is timestamptz, so we must convert to/from a valid ISO date.
+// ============================================================================
+
+/**
+ * Convert a local expiryDate (MM.YYYY, YYYY-MM, YYYY-MM-DD, or ISO) to an ISO string
+ * suitable for a Postgres timestamptz column. Returns null if unparseable.
+ */
+const expiryToISO = (expiryDate) => {
+  if (!expiryDate) return null
+  // MM.YYYY
+  if (/^\d{2}\.\d{4}$/.test(expiryDate)) {
+    const [mm, yyyy] = expiryDate.split('.')
+    return `${yyyy}-${mm}-01T00:00:00.000Z`
+  }
+  // YYYY-MM (from <input type="month">)
+  if (/^\d{4}-\d{2}$/.test(expiryDate)) {
+    return `${expiryDate}-01T00:00:00.000Z`
+  }
+  // YYYY-MM-DD or full ISO — validate
+  const d = new Date(expiryDate)
+  if (!isNaN(d)) return d.toISOString()
+  return null
+}
+
+/**
+ * Convert an ISO date string from the cloud back to MM.YYYY for local storage.
+ * Returns null if unparseable.
+ */
+const expiryFromISO = (isoDate) => {
+  if (!isoDate) return null
+  // Already MM.YYYY — pass through
+  if (/^\d{2}\.\d{4}$/.test(isoDate)) return isoDate
+  const d = new Date(isoDate)
+  if (isNaN(d)) return null
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const yyyy = d.getUTCFullYear()
+  return `${mm}.${yyyy}`
+}
+
 // Normalize text for matching (remove special chars, lowercase, trim)
 const normalizeText = (text) => {
   if (!text) return ''
@@ -1183,7 +1225,7 @@ export const syncToCloud = async () => {
           product_id: change.data.productId || change.data.product_id || null,
           quantity: change.data.quantity || null,
           unit: change.data.unit || null,
-          expiry_date: change.data.expiryDate || change.data.expiry_date || null,
+          expiry_date: expiryToISO(change.data.expiryDate || change.data.expiry_date),
           added_at: change.data.addedAt || change.data.added_at || null,
           updated_at: new Date().toISOString(),
           storage_location: change.data.storageLocation || change.data.storage_location || null,
@@ -1787,7 +1829,7 @@ function convertToNhostFormat(item) {
     product_name: item.productName,
     quantity: item.quantity,
     unit: item.unit,
-    expiry_date: item.expiryDate,
+    expiry_date: expiryToISO(item.expiryDate),
     purchase_date: item.purchaseDate || null,
     preferred_consumption_date: item.preferredConsumptionDate || null,
     storage_location: item.storageLocation || null,
@@ -1958,19 +2000,20 @@ export const fetchFromCloud = async (householdId) => {
         household_id: row.household_id,
         productId: row.product_id || null,
         productName: row.product_name || null,
-        quantity: row.quantity || null,
-        unit: row.unit || null,
-        expiryDate: row.expiry_date || null,
-        storageLocation: row.storage_location || null,
-        addedAt: row.added_at || new Date().toISOString(),
+        quantity: row.quantity ?? existing?.quantity ?? null,
+        unit: row.unit || existing?.unit || null,
+        // Convert ISO date from cloud back to MM.YYYY; fall back to existing local value
+        expiryDate: expiryFromISO(row.expiry_date) || existing?.expiryDate || null,
+        storageLocation: row.storage_location || existing?.storageLocation || null,
+        addedAt: row.added_at || existing?.addedAt || new Date().toISOString(),
         lastCheckedAt: row.updated_at || new Date().toISOString(),
         notificationSent: false,
         syncedAt: row.updated_at || new Date().toISOString(),
         _deleted: !!row._deleted,
         allowGracePeriod: !!row.allowGracePeriod,
-        gracePeriodMonths: row.gracePeriodMonths || null,
-        image_url: row.image_url || null,
-        imageUrl: row.image_url || row.imageUrl || null,
+        gracePeriodMonths: row.gracePeriodMonths ?? existing?.gracePeriodMonths ?? null,
+        image_url: row.image_url || existing?.image_url || null,
+        imageUrl: row.image_url || row.imageUrl || existing?.imageUrl || null,
       }
 
       await tx.store.put({ ...existing, ...toPut })

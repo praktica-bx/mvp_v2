@@ -1,29 +1,32 @@
 import React, { useState, useEffect } from 'react'
 import './StorageLocations.css'
 
-export default function StorageLocations({ onClose }) {
+export default function StorageLocations({ onClose, householdId }) {
   const [locations, setLocations] = useState([])
   const [newLocation, setNewLocation] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
 
+  const storageKey = householdId ? `storage-locations:${householdId}` : 'storage-locations'
+
   // Load locations from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('storage-locations')
+    const saved = localStorage.getItem(storageKey)
     if (saved) {
-      setLocations(JSON.parse(saved))
+      try {
+        setLocations(JSON.parse(saved))
+      } catch {
+        setLocations([])
+      }
     } else {
-      // Default locations
-      setLocations([
-        { id: 1, name: 'Kitchen Pantry', itemCount: 0 },
-        { id: 2, name: 'Basement Storage', itemCount: 0 },
-        { id: 3, name: 'Garage', itemCount: 0 },
-      ])
+      setLocations([])
     }
-  }, [])
+  }, [storageKey])
 
   const saveLocations = (updatedLocations) => {
     setLocations(updatedLocations)
+    localStorage.setItem(storageKey, JSON.stringify(updatedLocations))
+    // Also keep the generic key in sync for fallback reads
     localStorage.setItem('storage-locations', JSON.stringify(updatedLocations))
   }
 

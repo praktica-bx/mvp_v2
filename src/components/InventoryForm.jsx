@@ -245,8 +245,12 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0
       itemToSave.prescriptionRequired = !!formData.prescriptionRequired
 
-      // Add/override any additional fields as needed
-      itemToSave.addedDate = new Date().toISOString()
+      // Only stamp addedDate when creating (not editing — preserve original creation date)
+      if (!itemId) {
+        itemToSave.addedAt = new Date().toISOString()
+      }
+      // Remove legacy/transient fields that should not be stored in IDB user data
+      delete itemToSave.addedDate
 
       if (itemId) {
         try {

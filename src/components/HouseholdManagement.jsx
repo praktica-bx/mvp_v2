@@ -401,7 +401,7 @@ export default function HouseholdManagement({
         </div>
       </div>
       {showStorageLocations && (
-        <StorageLocations onClose={() => setShowStorageLocations(false)} />
+        <StorageLocations onClose={() => setShowStorageLocations(false)} householdId={currentHousehold?.id} />
       )}
     </div>
   )
