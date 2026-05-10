@@ -59,7 +59,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     allowGracePeriod: false,
     gracePeriodMonths: 0,
   })
-  const [loading, setLoading] = useState(false)
+            {itemId ? 'Edit Item' : 'Add Item to Inventory'}{householdName ? ` — ${householdName}` : ''}
   const [error, setError] = useState('')
 
   // Load field preferences on mount
@@ -250,8 +250,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           }
           itemToSave[field] = value || null
         }
-      })
-
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Saving...' : (itemId ? 'Save Changes' : 'Add Item')}
       // Always include grace period fields
       itemToSave.allowGracePeriod = !!formData.allowGracePeriod
       itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0

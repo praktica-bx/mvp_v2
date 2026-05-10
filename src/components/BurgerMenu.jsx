@@ -63,8 +63,9 @@ export default function BurgerMenu({
       )}
 
       <nav className={`burger-menu ${isOpen ? 'open' : ''}`}>
-        {/* Quick Actions */}
-        <div className="menu-section quick-actions">
+        <div className="burger-menu-content">
+          {/* Quick Actions */}
+          <div className="menu-section quick-actions">
           <div className="menu-section-header">Quick Actions</div>
           <button className="menu-item" onClick={() => handleMenuClick(onScanBarcode)}>
             <Smartphone size={20} style={{ marginRight: '0.5rem' }} />
@@ -161,12 +162,13 @@ export default function BurgerMenu({
         <div className="menu-divider"></div>
 
         {/* Utilities / Help at bottom */}
-        <div className="menu-bottom">
+          <div className="menu-bottom">
           <ThemeSwitcherFull />
           <button className="menu-item" onClick={() => setIsOpen(false)}>
             <X size={20} style={{ marginRight: '0.5rem' }} />
             Close
           </button>
+        </div>
         </div>
       </nav>
     </>
