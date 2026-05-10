@@ -12,144 +12,136 @@ import {
   getInventoryById,
   fetchFromCloud,
 } from '../database'
-import { SUPPLY_CATEGORIES } from '../constants/categories'
+
+const EMPTY_FORM = {
+  barcode: '',
+  productName: '',
+  quantity: 1,
+  unit: 'pcs',
+  expiryDate: '',
+  category: 'water',
+  allergens: [],
+  storageLocation: '',
+  cost: '',
+  purchaseDate: new Date().toISOString().split('T')[0],
+  preferredConsumptionDate: '',
+  supplier: '',
+  storageNotes: '',
+  itemStatus: 'unopened',
+  lotNumber: '',
+  nutritionInfo: '',
+  dietaryRestrictions: [],
+  priorityLevel: 'important',
+  packaging: '',
+  ingredients: '',
+  packageSize: '',
+  countryOfOrigin: '',
+  storageInstructions: '',
+  manufacturer: '',
+  prescriptionRequired: false,
+  dosage: '',
+  batteryChemistry: '',
+  manufactureDate: '',
+  allowGracePeriod: false,
+  gracePeriodMonths: 0,
+  brand: '',
+  batteryCapacity: '',
+  lumen: '',
+  caloriesPerServing: '',
+  servingsPerPackage: '',
+  powerRating: '',
+  medicationForm: '',
+  documentsType: '',
+  specialNeedsDetails: '',
+  storageTemperature: '',
+  containerType: '',
+}
 
 export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName }) {
+  const { openConflictModal } = useConflictModal()
+
+  const [formData, setFormData] = useState(EMPTY_FORM)
   const [preferences, setPreferences] = useState(null)
-  const [formData, setFormData] = useState({
-    barcode: scannedBarcode || '',
-    brand: '',
-    productName: '',
-    quantity: 1,
-    unit: 'pcs',
-    expiryDate: '',
-    category: 'water',
-    allergens: [],
-    storageLocation: '',
-    cost: '',
-    purchaseDate: new Date().toISOString().split('T')[0],
-    preferredConsumptionDate: '',
-    supplier: '',
-    storageNotes: '',
-    itemStatus: 'unopened',
-    lotNumber: '',
-    nutritionInfo: '',
-    dietaryRestrictions: [],
-    priorityLevel: 'important',
-    packaging: '',
-    ingredients: '',
-    packageSize: '',
-    countryOfOrigin: '',
-    storageInstructions: '',
-    manufacturer: '',
-    prescriptionRequired: false,
-    dosage: '',
-    batteryChemistry: '',
-    manufactureDate: '',
-    batteryCapacity: '',
-    lumen: '',
-    caloriesPerServing: '',
-    servingsPerPackage: 0,
-    powerRating: '',
-    medicationForm: '',
-    documentsType: '',
-    specialNeedsDetails: '',
-    storageTemperature: '',
-    containerType: '',
-    allowGracePeriod: false,
-    gracePeriodMonths: 0,
-  })
-            {itemId ? 'Edit Item' : 'Add Item to Inventory'}{householdName ? ` — ${householdName}` : ''}
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [storageLocations, setStorageLocations] = useState([])
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState(null)
+  const [ofModalOpen, setOfModalOpen] = useState(false)
 
-  // Load field preferences on mount
+  // Load preferences
   useEffect(() => {
-    const loadPreferences = async () => {
-      const prefs = await getFieldPreferences()
-      setPreferences(prefs)
+    const loadPrefs = async () => {
+      try {
+        const prefs = await getFieldPreferences(householdId)
+        setPreferences(prefs)
+      } catch (err) {
+        console.warn('Failed to load preferences:', err)
+        setPreferences({})
+      }
     }
-    loadPreferences()
-  }, [])
+    loadPrefs()
+  }, [householdId])
 
-  // Load item data if editing
+  // Load item data when editing
   useEffect(() => {
     if (!itemId) return
     const loadItem = async () => {
       try {
-        const local = await getInventoryItem(itemId)
-        if (local) {
-          // Map local fields into formData shape
-          setFormData((prev) => ({
-            ...prev,
-            ...local,
-            barcode: local.barcode || '',
-            productName: local.productName || '',
-            quantity: local.quantity || 1,
-            unit: local.unit || 'pcs',
-            expiryDate: local.expiryDate || '',
-            category: local.category || 'water',
-            allergens: local.allergens || [],
-            storageLocation: local.storageLocation || '',
-            cost: local.cost || '',
-            purchaseDate: local.purchaseDate || new Date().toISOString().split('T')[0],
-            preferredConsumptionDate: local.preferredConsumptionDate || '',
-            supplier: local.supplier || '',
-            storageNotes: local.storageNotes || '',
-            itemStatus: local.itemStatus || 'unopened',
-            lotNumber: local.lotNumber || '',
-            nutritionInfo: local.nutritionInfo || '',
-            dietaryRestrictions: local.dietaryRestrictions || [],
-            priorityLevel: local.priorityLevel || 'important',
-            packaging: local.packaging || '',
-            allowGracePeriod: !!local.allowGracePeriod,
-            gracePeriodMonths: local.gracePeriodMonths || 0,
-            batteryCapacity: local.batteryCapacity || local.battery_capacity || '',
-            lumen: local.lumen || '',
-            caloriesPerServing: local.caloriesPerServing || local.calories_per_serving || '',
-            servingsPerPackage: local.servingsPerPackage || local.servings_per_package || 0,
-            powerRating: local.powerRating || local.power_rating || '',
-            medicationForm: local.medicationForm || local.medication_form || '',
-            documentsType: local.documentsType || local.documents_type || '',
-            specialNeedsDetails: local.specialNeedsDetails || local.special_needs_details || '',
-            storageTemperature: local.storageTemperature || local.storage_temperature || '',
-            containerType: local.containerType || local.container_type || '',
-          }))
+        const item = await getInventoryItem(itemId)
+        if (item) {
+          setFormData({
+            ...EMPTY_FORM,
+            ...item,
+            allergens: Array.isArray(item.allergens)
+              ? item.allergens
+              : item.allergens ? item.allergens.split(',') : [],
+            dietaryRestrictions: Array.isArray(item.dietaryRestrictions)
+              ? item.dietaryRestrictions
+              : item.dietaryRestrictions ? item.dietaryRestrictions.split(',') : [],
+            allowGracePeriod: !!item.allowGracePeriod,
+            gracePeriodMonths: item.gracePeriodMonths || 0,
+          })
         }
       } catch (err) {
-        console.warn('Failed to load local item for edit:', err)
+        console.warn('Failed to load item for editing:', err)
       }
     }
     loadItem()
   }, [itemId])
 
-  const { open: openConflictModal } = useConflictModal()
-
-  // Update barcode when scanned barcode changes and auto-lookup product
+  // Watch for scanned barcode
   useEffect(() => {
     if (scannedBarcode) {
       setFormData((prev) => ({ ...prev, barcode: scannedBarcode }))
-      doLookupBarcode(scannedBarcode)
     }
   }, [scannedBarcode])
 
-  const [ofModalOpen, setOfModalOpen] = useState(false)
-  const [lookupLoading, setLookupLoading] = useState(false)
-  const [lookupError, setLookupError] = useState(null)
-  const [storageLocations, setStorageLocations] = useState([])
+  // Load storage locations
+  useEffect(() => {
+    try {
+      let saved = null
+      if (householdId) saved = localStorage.getItem(`storage-locations:${householdId}`)
+      if (!saved) saved = localStorage.getItem('storage-locations')
+      if (saved) setStorageLocations(JSON.parse(saved))
+      else setStorageLocations([])
+    } catch (err) {
+      console.warn('Failed to load storage locations:', err)
+      setStorageLocations([])
+    }
+  }, [householdId])
 
-  const applyOpenFoodFacts = (product) => {
-    if (!product) return
-    // Overwrite fields as requested
+  const applyOpenFoodFacts = (prod) => {
+    if (!prod) return
     setFormData((prev) => ({
       ...prev,
-      productName: product.product_name || product.product_name_en || prev.productName,
-      brand: product.brands || prev.brand,
-      imageUrl: product.image_front_small_url || product.image_url || prev.imageUrl,
-      ingredients: product.ingredients_text || prev.ingredients,
-      allergens: product.allergens_tags ? product.allergens_tags.map(a => a.replace('en:', '')) : prev.allergens,
-      nutritionInfo: product.nutriments || prev.nutritionInfo,
-      packaging: product.packaging || prev.packaging,
-      quantity: product.quantity || prev.quantity,
+      productName: prod.productName || prev.productName,
+      barcode: prod.barcode || prev.barcode,
+      brand: prod.brand || prev.brand,
+      ingredients: prod.ingredients || prev.ingredients,
+      nutritionInfo: prod.nutritionInfo || prev.nutritionInfo,
+      packageSize: prod.packageSize || prev.packageSize,
+      category: prod.category || prev.category,
     }))
   }
 
@@ -168,22 +160,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     }
   }
 
-  useEffect(() => {
-    const loadLocations = () => {
-      try {
-        let saved = null
-        if (householdId) saved = localStorage.getItem(`storage-locations:${householdId}`)
-        if (!saved) saved = localStorage.getItem('storage-locations')
-        if (saved) setStorageLocations(JSON.parse(saved))
-        else setStorageLocations([])
-      } catch (err) {
-        console.warn('Failed to load storage locations:', err)
-        setStorageLocations([])
-      }
-    }
-    loadLocations()
-  }, [householdId])
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     const newValue = type === 'checkbox' ? checked : value
@@ -198,10 +174,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     setFormData((prev) => ({ ...prev, dietaryRestrictions: dietary }))
   }
 
-  // Validate form based on mandatory fields from preferences
   const validateForm = () => {
     if (!preferences) return true
-
     for (const [field, config] of Object.entries(preferences)) {
       if (config.mandatory) {
         const value = formData[field]
@@ -210,12 +184,9 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         }
       }
     }
-
-    // Food category allergens check
     if (formData.category === 'food' && formData.allergens.length === 0 && preferences.allergens?.mandatory) {
       throw new Error('Please select at least one allergen for food items')
     }
-
     return true
   }
 
@@ -223,11 +194,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     e.preventDefault()
     setLoading(true)
     setError('')
-
     try {
       validateForm()
-
-      // Grace period validation
       if (formData.allowGracePeriod) {
         const months = parseInt(formData.gracePeriodMonths, 10)
         if (isNaN(months) || months < 0) {
@@ -235,80 +203,33 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         }
       }
 
-      // Only include fields that are visible (optional: only include visible ones to save space)
-      const itemToSave = {
-        addedDate: new Date().toISOString(),
-      }
-
-      // Add all fields that exist in preferences
-      Object.keys(preferences || {}).forEach((field) => {
-        if (field in formData) {
-          let value = formData[field]
-          // Handle arrays
-          if (Array.isArray(value)) {
-            value = value.join(',')
-          }
-          itemToSave[field] = value || null
-        }
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Saving...' : (itemId ? 'Save Changes' : 'Add Item')}
-      // Always include grace period fields
+      // Save ALL fields from formData, converting arrays to comma-separated strings for DB
+      const itemToSave = { ...formData }
+      // Convert array fields to comma-separated strings for DB storage
+      if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
+      if (Array.isArray(itemToSave.dietaryRestrictions)) itemToSave.dietaryRestrictions = itemToSave.dietaryRestrictions.join(',')
+      // Normalize booleans and numbers
       itemToSave.allowGracePeriod = !!formData.allowGracePeriod
       itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0
-
-      // Include added category-dependent fields
-      itemToSave.brand = formData.brand || null
-      itemToSave.ingredients = formData.ingredients || null
-      itemToSave.packageSize = formData.packageSize || null
-      itemToSave.countryOfOrigin = formData.countryOfOrigin || null
-      itemToSave.storageInstructions = formData.storageInstructions || null
-      itemToSave.manufacturer = formData.manufacturer || null
       itemToSave.prescriptionRequired = !!formData.prescriptionRequired
-      itemToSave.dosage = formData.dosage || null
-      itemToSave.batteryChemistry = formData.batteryChemistry || null
-      itemToSave.manufactureDate = formData.manufactureDate || null
-      itemToSave.batteryCapacity = formData.batteryCapacity || null
-      itemToSave.lumen = formData.lumen || null
-      itemToSave.caloriesPerServing = formData.caloriesPerServing || null
-      itemToSave.servingsPerPackage = formData.servingsPerPackage || null
-      itemToSave.powerRating = formData.powerRating || null
-      itemToSave.medicationForm = formData.medicationForm || null
-      itemToSave.documentsType = formData.documentsType || null
-      itemToSave.specialNeedsDetails = formData.specialNeedsDetails || null
-      itemToSave.storageTemperature = formData.storageTemperature || null
-      itemToSave.containerType = formData.containerType || null
 
-      let savedId = null
+      // Add/override any additional fields as needed
+      itemToSave.addedDate = new Date().toISOString()
+
       if (itemId) {
-        // EDIT existing
         try {
           await updateInventoryItem(itemId, itemToSave)
-          savedId = itemId
         } catch (err) {
-          // Conflict from pre-write remote check
           if (err && err.code === 'conflict') {
-            try {
-              const remote = await getInventoryById(itemId)
-              const local = await getInventoryItem(itemId)
-              const choice = await openConflictModal({ local: { ...local }, remote: { ...remote } })
-              if (choice.action === 'keepLocal') {
-                await updateInventoryItemForce(itemId, itemToSave)
-                savedId = itemId
-              } else if (choice.action === 'useRemote') {
-                // Pull remote changes for the household and refresh
-                await fetchFromCloud(householdId)
-                // Do not overwrite remote; treat remote as authoritative
-                savedId = itemId
-              } else {
-                // cancel
-                setError('Edit cancelled due to conflict')
-                setLoading(false)
-                return
-              }
-            } catch (modalErr) {
-              console.error('Conflict resolution failed:', modalErr)
-              setError('Conflict resolution failed')
-              setLoading(false)
+            const remote = await getInventoryById(itemId)
+            const local = await getInventoryItem(itemId)
+            const choice = await openConflictModal({ local: { ...local }, remote: { ...remote } })
+            if (choice.action === 'keepLocal') {
+              await updateInventoryItemForce(itemId, itemToSave)
+            } else if (choice.action === 'useRemote') {
+              await fetchFromCloud(householdId)
+            } else {
+              setError('Edit cancelled due to conflict')
               return
             }
           } else {
@@ -316,50 +237,12 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           }
         }
       } else {
-        // CREATE new
         const newId = await addInventoryItem(itemToSave, householdId)
-        savedId = newId
-
-        // If offline, track this for sync
         if (!isOnline) {
           await trackChange('inventory', newId, 'create')
-          setError('') // Clear any previous errors
         }
+        setFormData(EMPTY_FORM)
       }
-
-      // Reset form
-      setFormData({
-        barcode: '',
-        productName: '',
-        quantity: 1,
-        unit: 'pcs',
-        expiryDate: '',
-        category: 'water',
-        allergens: [],
-        storageLocation: '',
-        cost: '',
-        purchaseDate: new Date().toISOString().split('T')[0],
-        preferredConsumptionDate: '',
-        supplier: '',
-        storageNotes: '',
-        itemStatus: 'unopened',
-        lotNumber: '',
-        nutritionInfo: '',
-        dietaryRestrictions: [],
-        priorityLevel: 'important',
-        packaging: '',
-        ingredients: '',
-        packageSize: '',
-        countryOfOrigin: '',
-        storageInstructions: '',
-        manufacturer: '',
-        prescriptionRequired: false,
-        dosage: '',
-        batteryChemistry: '',
-        manufactureDate: '',
-        allowGracePeriod: false,
-        gracePeriodMonths: 0,
-      })
       onSave()
     } catch (err) {
       setError(err.message || 'Error saving item')
@@ -372,11 +255,9 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     return <div className="loading">Loading form...</div>
   }
 
-  // Helper to render field conditionally
   const renderField = (fieldName) => {
     const config = preferences[fieldName]
     if (!config || !config.visible) return null
-
     const label = `${config.label}${config.mandatory ? ' *' : ''}`
     const value = formData[fieldName]
 
@@ -408,7 +289,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           </div>
         )
-
       case 'productName':
         return (
           <div key={fieldName} className="form-group">
@@ -419,12 +299,27 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               name={fieldName}
               value={value}
               onChange={handleChange}
-              placeholder="e.g., Canned beans"
+              placeholder="Product name"
               required={config.mandatory}
             />
           </div>
         )
-
+      case 'category':
+        return (
+          <div key={fieldName} className="form-group">
+            <label htmlFor={fieldName}>{label}</label>
+            <select id={fieldName} name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
+              <option value="water">Water</option>
+              <option value="food">Food</option>
+              <option value="first-aid">First Aid</option>
+              <option value="tools">Tools</option>
+              <option value="light">Light</option>
+              <option value="documents">Documents</option>
+              <option value="special-needs">Special Needs</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        )
       case 'quantity':
         return (
           <div key={fieldName} className="form-group">
@@ -435,41 +330,64 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               name={fieldName}
               value={value}
               onChange={handleChange}
-              min="1"
+              min="0"
+              step="1"
               required={config.mandatory}
             />
           </div>
         )
-
       case 'unit':
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
-            <select name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
+            <select id={fieldName} name={fieldName} value={value} onChange={handleChange}>
               <option value="pcs">pcs</option>
-              <option value="g">g</option>
               <option value="kg">kg</option>
-              <option value="l">l</option>
-              <option value="ml">ml</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="mL">mL</option>
+              <option value="box">box</option>
+              <option value="pack">pack</option>
             </select>
           </div>
         )
-
-      case 'category':
+      case 'expiryDate':
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
-            <select name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
-              {SUPPLY_CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
+            <input
+              id={fieldName}
+              type="date"
+              name={fieldName}
+              value={value}
+              onChange={handleChange}
+              required={config.mandatory}
+            />
           </div>
         )
-
-      case 'expiryDate':
+      case 'allergens':
+        return (
+          <div key={fieldName} className="form-group">
+            <label>{label}</label>
+            <AllergenCheckboxes value={formData.allergens} onChange={handleAllergenChange} />
+          </div>
+        )
+      case 'cost':
+        return (
+          <div key={fieldName} className="form-group">
+            <label htmlFor={fieldName}>{label}</label>
+            <input
+              id={fieldName}
+              type="number"
+              name={fieldName}
+              value={value}
+              onChange={handleChange}
+              min="0"
+              step="0.01"
+              required={config.mandatory}
+            />
+          </div>
+        )
       case 'purchaseDate':
       case 'preferredConsumptionDate':
         return (
@@ -485,44 +403,18 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             />
           </div>
         )
-
-      case 'cost':
-        return (
-          <div key={fieldName} className="form-group">
-            <label htmlFor={fieldName}>{label}</label>
-            <input
-              id={fieldName}
-              type="number"
-              step="0.01"
-              name={fieldName}
-              value={value}
-              onChange={handleChange}
-              placeholder="e.g., 25.99"
-              required={config.mandatory}
-            />
-          </div>
-        )
-
-      case 'allergens':
-        return formData.category === 'food' ? (
-          <div key={fieldName}>
-            <AllergenCheckboxes value={value} onChange={handleAllergenChange} />
-          </div>
-        ) : null
-
       case 'itemStatus':
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
-            <select name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
+            <select id={fieldName} name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
               <option value="unopened">Unopened</option>
               <option value="opened">Opened</option>
-              <option value="partially-used">Partially Used</option>
               <option value="expired">Expired</option>
+              <option value="damaged">Damaged</option>
             </select>
           </div>
         )
-
       case 'priorityLevel':
         return (
           <div key={fieldName} className="form-group">
@@ -534,7 +426,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </select>
           </div>
         )
-
       case 'storageLocation':
         return (
           <div key={fieldName} className="form-group">
@@ -547,7 +438,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </select>
           </div>
         )
-
       case 'supplier':
       case 'lotNumber':
       case 'nutritionInfo':
@@ -558,7 +448,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             <label htmlFor={fieldName}>{label}</label>
             <input
               id={fieldName}
-              type={fieldName === 'storageNotes' ? 'textarea' : 'text'}
+              type="text"
               name={fieldName}
               value={value}
               onChange={handleChange}
@@ -567,7 +457,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             />
           </div>
         )
-
       case 'dietaryRestrictions':
         return (
           <div key={fieldName} className="form-group">
@@ -593,7 +482,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           </div>
         )
-
       default:
         return null
     }
@@ -606,13 +494,12 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
-            Add Item to Inventory{householdName ? ` — ${householdName}` : ''}
+            {itemId ? 'Edit Item' : 'Add Item to Inventory'}{householdName ? ` — ${householdName}` : ''}
           </h2>
           <button className="modal-close" onClick={onCancel}>×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="inventory-form">
-          {/* Render visible fields */}
           {visibleFields.includes('barcode') && visibleFields.includes('productName') && (
             <>
               {renderField('barcode')}
@@ -621,7 +508,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </>
           )}
 
-          {/* Quantity and Unit in a row */}
           {(visibleFields.includes('quantity') || visibleFields.includes('unit')) && (
             <div className="form-row">
               {renderField('quantity')}
@@ -629,9 +515,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           )}
 
-          {/* Core fields */}
           {renderField('expiryDate')}
-          {/* Grace period: checkbox + months */}
+
           <div className="form-group">
             <label className="checkbox-label grace-checkbox-label">
               <input
@@ -660,25 +545,19 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               />
             </div>
           )}
+
           {renderField('allergens')}
 
-          {/* Category-dependent fields */}
-          {/* Brand (general) */}
           <div className="form-group">
             <label htmlFor="brand">Brand</label>
             <input id="brand" name="brand" type="text" value={formData.brand} onChange={handleChange} />
           </div>
 
-          {/* Food-specific */}
           {formData.category === 'food' && (
             <>
               <div className="form-group">
                 <label htmlFor="ingredients">Ingredients</label>
                 <textarea id="ingredients" name="ingredients" value={formData.ingredients} onChange={handleChange} />
-              </div>
-              <div className="form-group">
-                <label htmlFor="nutritionInfo">Nutrition (raw)</label>
-                <textarea id="nutritionInfo" name="nutritionInfo" value={formData.nutritionInfo} onChange={handleChange} />
               </div>
               <div className="form-group">
                 <label htmlFor="packageSize">Package size / net weight</label>
@@ -695,7 +574,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </>
           )}
 
-          {/* First aid / meds */}
           {formData.category === 'first-aid' && (
             <>
               <div className="form-group">
@@ -718,7 +596,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </>
           )}
 
-          {/* Water / liquids */}
           {formData.category === 'water' && (
             <div className="form-group">
               <label htmlFor="packageSize">Volume</label>
@@ -726,7 +603,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           )}
 
-          {/* Light / lighting specific */}
           {formData.category === 'light' && (
             <>
               <div className="form-group">
@@ -734,13 +610,12 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
                 <input id="lumen" name="lumen" type="number" value={formData.lumen} onChange={handleChange} />
               </div>
               <div className="form-group">
-                <label htmlFor="batteryCapacity">Battery capacity (mAh) — if applicable</label>
+                <label htmlFor="batteryCapacity">Battery capacity (mAh)</label>
                 <input id="batteryCapacity" name="batteryCapacity" type="number" value={formData.batteryCapacity} onChange={handleChange} />
               </div>
             </>
           )}
 
-          {/* Tools / batteries */}
           {formData.category === 'tools' && (
             <>
               <div className="form-group">
@@ -762,7 +637,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </>
           )}
 
-          {/* General additional info */}
           <div className="form-group">
             <label htmlFor="countryOfOrigin">Country of origin</label>
             <input id="countryOfOrigin" name="countryOfOrigin" type="text" value={formData.countryOfOrigin} onChange={handleChange} />
@@ -772,7 +646,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             <input id="storageInstructions" name="storageInstructions" type="text" value={formData.storageInstructions} onChange={handleChange} />
           </div>
 
-          {/* Documents-specific */}
           {formData.category === 'documents' && (
             <>
               <div className="form-group">
@@ -786,7 +659,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </>
           )}
 
-          {/* Special needs */}
           {formData.category === 'special-needs' && (
             <div className="form-group">
               <label htmlFor="specialNeedsDetails">Details / instructions</label>
@@ -794,7 +666,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </div>
           )}
 
-          {/* Additional fields */}
           {renderField('storageLocation')}
           {renderField('purchaseDate')}
           {renderField('preferredConsumptionDate')}
@@ -816,7 +687,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Saving...' : 'Add Item'}
+              {loading ? 'Saving...' : itemId ? 'Save Changes' : 'Add Item'}
             </button>
           </div>
         </form>
