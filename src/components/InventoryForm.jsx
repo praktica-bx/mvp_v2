@@ -90,11 +90,22 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       try {
         const item = await getInventoryItem(itemId)
         if (item) {
+          // Format expiryDate as YYYY-MM-DD for input type="date"
+          let expiryRaw = item.expiryDate || item.expiry_date || '';
+          let expiryDate = '';
+          if (expiryRaw) {
+            // If expiryRaw is a Date object or ISO string, convert to YYYY-MM-DD
+            const d = new Date(expiryRaw);
+            if (!isNaN(d)) {
+              expiryDate = d.toISOString().split('T')[0];
+            } else {
+              expiryDate = expiryRaw;
+            }
+          }
           setFormData({
             ...EMPTY_FORM,
             ...item,
-            // Defensive: support both expiryDate and expiry_date
-            expiryDate: item.expiryDate || item.expiry_date || '',
+            expiryDate,
             allergens: Array.isArray(item.allergens)
               ? item.allergens
               : item.allergens ? item.allergens.split(',') : [],
