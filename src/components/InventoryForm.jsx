@@ -90,24 +90,30 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       try {
         const item = await getInventoryItem(itemId)
         if (item) {
-          // Format expiryDate as MM.YYYY for input type="month"
+          // Robustly parse expiryDate for input type="month"
           let expiryRaw = item.expiryDate || item.expiry_date || '';
           let expiryDate = '';
           if (expiryRaw) {
-            // Try to parse as date, then format as MM.YYYY
-            const d = new Date(expiryRaw);
-            if (!isNaN(d)) {
-              const month = String(d.getMonth() + 1).padStart(2, '0');
-              const year = d.getFullYear();
-              expiryDate = `${year}-${month}`;
-            } else if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
-              // Already in MM.YYYY, convert to YYYY-MM for input type="month"
+            if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
+              // MM.YYYY → YYYY-MM
               const [mm, yyyy] = expiryRaw.split('.');
               expiryDate = `${yyyy}-${mm}`;
             } else if (/^\d{4}-\d{2}$/.test(expiryRaw)) {
+              // YYYY-MM
               expiryDate = expiryRaw;
+            } else if (/^\d{4}-\d{2}-\d{2}/.test(expiryRaw)) {
+              // YYYY-MM-DD or ISO
+              expiryDate = expiryRaw.slice(0, 7);
             } else {
-              expiryDate = '';
+              // Try parsing as Date
+              const d = new Date(expiryRaw);
+              if (!isNaN(d)) {
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                expiryDate = `${year}-${month}`;
+              } else {
+                expiryDate = '';
+              }
             }
           }
           setFormData({
