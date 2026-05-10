@@ -90,16 +90,24 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       try {
         const item = await getInventoryItem(itemId)
         if (item) {
-          // Format expiryDate as YYYY-MM-DD for input type="date"
+          // Format expiryDate as MM.YYYY for input type="month"
           let expiryRaw = item.expiryDate || item.expiry_date || '';
           let expiryDate = '';
           if (expiryRaw) {
-            // If expiryRaw is a Date object or ISO string, convert to YYYY-MM-DD
+            // Try to parse as date, then format as MM.YYYY
             const d = new Date(expiryRaw);
             if (!isNaN(d)) {
-              expiryDate = d.toISOString().split('T')[0];
-            } else {
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const year = d.getFullYear();
+              expiryDate = `${year}-${month}`;
+            } else if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
+              // Already in MM.YYYY, convert to YYYY-MM for input type="month"
+              const [mm, yyyy] = expiryRaw.split('.');
+              expiryDate = `${yyyy}-${mm}`;
+            } else if (/^\d{4}-\d{2}$/.test(expiryRaw)) {
               expiryDate = expiryRaw;
+            } else {
+              expiryDate = '';
             }
           }
           setFormData({
@@ -218,6 +226,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
 
       // Save ALL fields from formData, converting arrays to comma-separated strings for DB
       const itemToSave = { ...formData }
+      // Convert expiryDate from YYYY-MM to MM.YYYY for storage
+      if (itemToSave.expiryDate && /^\d{4}-\d{2}$/.test(itemToSave.expiryDate)) {
+        const [year, month] = itemToSave.expiryDate.split('-');
+        itemToSave.expiryDate = `${month}.${year}`;
+      }
       // Convert array fields to comma-separated strings for DB storage
       if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
       if (Array.isArray(itemToSave.dietaryRestrictions)) itemToSave.dietaryRestrictions = itemToSave.dietaryRestrictions.join(',')
@@ -370,12 +383,14 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             <label htmlFor={fieldName}>{label}</label>
             <input
               id={fieldName}
-              type="date"
+              type="month"
               name={fieldName}
               value={value}
               onChange={handleChange}
               required={config.mandatory}
+              pattern="\d{4}-\d{2}"
             />
+            <small>Format: MM.YYYY</small>
           </div>
         )
       case 'allergens':
