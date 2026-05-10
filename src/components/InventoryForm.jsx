@@ -93,6 +93,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           setFormData({
             ...EMPTY_FORM,
             ...item,
+            // Defensive: support both expiryDate and expiry_date
+            expiryDate: item.expiryDate || item.expiry_date || '',
             allergens: Array.isArray(item.allergens)
               ? item.allergens
               : item.allergens ? item.allergens.split(',') : [],

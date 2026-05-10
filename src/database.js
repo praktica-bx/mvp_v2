@@ -1109,74 +1109,55 @@ export const getEnrichedInventory = async (householdId, includeDeleted = false) 
  */
 export const updateInventoryItem = async (id, updates) => {
   try {
-    const db = await initDB()
-
-    // Lightweight pre-write check: if cloud configured and authenticated,
-    // fetch remote's updated_at and if it's newer than local syncedAt, abort with conflict.
-    let item
-    try {
-      if (isNhostConfigured() && isNhostAuthenticated()) {
-        // Open a readonly transaction just to get the item for the check
-        const txCheck = db.transaction('inventory', 'readonly')
-        item = await txCheck.store.get(id)
-        await txCheck.done
-        if (!item) {
-          throw new Error(`Inventory item with ID ${id} not found`)
-        }
-        const remote = await getInventoryById(id)
+    const db = await initDB();
+    // Step 1: Pre-check for conflicts (separate transaction)
+    let item = null;
+    if (isNhostConfigured() && isNhostAuthenticated()) {
+      try {
+        const txCheck = db.transaction('inventory', 'readonly');
+        item = await txCheck.store.get(id);
+        await txCheck.done;
+        if (!item) throw new Error(`Inventory item with ID ${id} not found`);
+        const remote = await getInventoryById(id);
         if (remote && remote.updated_at && item.syncedAt && new Date(remote.updated_at) > new Date(item.syncedAt)) {
-          const err = new Error('Conflict: remote version is newer than local copy')
-          err.code = 'conflict'
-          throw err
+          const err = new Error('Conflict: remote version is newer than local copy');
+          err.code = 'conflict';
+          throw err;
         }
-      } else {
-        // If not cloud, just get the item
-        const txCheck = db.transaction('inventory', 'readonly')
-        item = await txCheck.store.get(id)
-        await txCheck.done
-        if (!item) {
-          throw new Error(`Inventory item with ID ${id} not found`)
-        }
-      }
-    } catch (precheckErr) {
-      // If precheck throws a conflict error, bubble up. Otherwise log and continue.
-      if (precheckErr && precheckErr.code === 'conflict') throw precheckErr
-      console.warn('Pre-write remote check failed; proceeding with local update:', precheckErr.message)
-      // Still need to get the item if not already
-      if (!item) {
-        const txCheck = db.transaction('inventory', 'readonly')
-        item = await txCheck.store.get(id)
-        await txCheck.done
-        if (!item) {
-          throw new Error(`Inventory item with ID ${id} not found`)
-        }
+      } catch (precheckErr) {
+        if (precheckErr && precheckErr.code === 'conflict') throw precheckErr;
+        console.warn('Pre-write remote check failed; proceeding with local update:', precheckErr.message);
       }
     }
-
-    // Now open a new transaction for the update
-    const tx = db.transaction('inventory', 'readwrite')
+    // If not cloud or precheck failed, get the item locally
+    if (!item) {
+      const txCheck = db.transaction('inventory', 'readonly');
+      item = await txCheck.store.get(id);
+      await txCheck.done;
+      if (!item) throw new Error(`Inventory item with ID ${id} not found`);
+    }
+    // Step 2: Update in a fresh transaction
+    const tx = db.transaction('inventory', 'readwrite');
     const updatedItem = {
       ...item,
       ...updates,
       lastCheckedAt: new Date().toISOString(),
-      syncedAt: null, // Mark as needing sync
-    }
-    await tx.store.put(updatedItem)
-    await tx.done
-
-    // Track change for sync
-    await trackChange('inventory', id, 'update')
-    // Trigger background sync (best-effort)
+      syncedAt: null,
+    };
+    await tx.store.put(updatedItem);
+    await tx.done;
+    // Step 3: Track change and trigger sync
+    await trackChange('inventory', id, 'update');
     try {
-      syncToCloud().catch((e) => console.warn('Background sync failed:', e.message || e))
+      syncToCloud().catch((e) => console.warn('Background sync failed:', e.message || e));
     } catch (e) {
-      console.warn('Failed to trigger background sync:', e.message || e)
+      console.warn('Failed to trigger background sync:', e.message || e);
     }
   } catch (error) {
-    console.error('Failed to update inventory item:', error)
-    throw new Error(`Failed to update inventory item: ${error.message}`)
+    console.error('Failed to update inventory item:', error);
+    throw new Error(`Failed to update inventory item: ${error.message}`);
   }
-}
+};
 
 /**
  * Sync pending local changes to the cloud via GraphQL
