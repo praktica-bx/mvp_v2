@@ -408,29 +408,27 @@ export const trackChange = async (table, recordId, operation) => {
 export const getPendingChanges = async () => {
   try {
     const db = await initDB()
-    const tx = db.transaction(['sync_log', 'products', 'inventory', 'settings'], 'readonly')
-    // Boolean values are not valid IndexedDB key types and are excluded from indexes.
-    // Read ALL records directly from the store and filter in JS.
-    const allLogs = await tx.objectStore('sync_log').getAll()
+    // Read all sync logs in one shot (no tx reuse across await)
+    const allLogs = await db.getAll('sync_log')
     const logs = allLogs.filter((log) => log && log.synced === false)
 
-    // Fetch actual data for each change
+    // Fetch actual data for each log using independent db.get() calls
+    // (each call opens and closes its own readonly transaction, avoiding the
+    //  "transaction already committed" IDB error that arises from reusing a
+    //  transaction across separate await boundaries)
+    const validStores = ['products', 'inventory', 'settings', 'sync_log']
     const changes = []
     for (const log of logs) {
       let data = null
-
-      if (log.operation !== 'delete') {
-        const store = tx.objectStore(log.table)
-        data = await store.get(log.recordId)
+      if (log.operation !== 'delete' && validStores.includes(log.table)) {
+        try {
+          data = await db.get(log.table, log.recordId)
+        } catch (e) {
+          console.warn(`[SYNC] Failed to get ${log.table}/${log.recordId}:`, e.message || e)
+        }
       }
-
-      changes.push({
-        ...log,
-        data,
-      })
+      changes.push({ ...log, data })
     }
-
-    await tx.done
     return changes
   } catch (error) {
     console.error('Failed to get pending changes:', error)
@@ -834,29 +832,24 @@ export const findProductByName = async (scannedText) => {
 export const updateProduct = async (id, updates) => {
   try {
     const db = await initDB()
-    const tx = db.transaction('products', 'readwrite')
-    const product = await tx.store.get(id)
-
+    // Read in its own transaction first (avoid reusing a readwrite tx across await)
+    const product = await db.get('products', id)
     if (!product) {
       throw new Error(`Product with ID ${id} not found`)
     }
-
     const updatedProduct = {
       ...product,
       ...updates,
       updatedAt: new Date().toISOString(),
-      syncedAt: null, // Mark as needing sync
+      syncedAt: null,
     }
-
-    // Update normalizedName if name changed
     if (updates.name && updates.name !== product.name) {
       updatedProduct.normalizedName = normalizeText(updates.name)
     }
-
+    // Write in a fresh transaction
+    const tx = db.transaction('products', 'readwrite')
     await tx.store.put(updatedProduct)
     await tx.done
-
-    // Track change for sync
     await trackChange('products', id, 'update')
   } catch (error) {
     console.error('Failed to update product:', error)
@@ -872,23 +865,24 @@ export const updateProduct = async (id, updates) => {
 export const deleteProduct = async (id, hard = false) => {
   try {
     const db = await initDB()
-    const tx = db.transaction('products', 'readwrite')
-
     if (hard) {
+      const tx = db.transaction('products', 'readwrite')
       await tx.store.delete(id)
+      await tx.done
     } else {
-      const product = await tx.store.get(id)
+      // Read first, then write in a separate transaction (avoid tx reuse across await)
+      const product = await db.get('products', id)
       if (product) {
-        product._deleted = true
-        product.updatedAt = new Date().toISOString()
-        product.syncedAt = null
-        await tx.store.put(product)
+        const tx = db.transaction('products', 'readwrite')
+        await tx.store.put({
+          ...product,
+          _deleted: true,
+          updatedAt: new Date().toISOString(),
+          syncedAt: null,
+        })
+        await tx.done
       }
     }
-
-    await tx.done
-
-    // Track change for sync
     await trackChange('products', id, 'delete')
   } catch (error) {
     console.error('Failed to delete product:', error)
@@ -904,51 +898,37 @@ export const deleteProduct = async (id, hard = false) => {
 export const upsertProduct = async (product) => {
   try {
     const db = await initDB()
-    const tx = db.transaction('products', 'readwrite')
-
-    // Attempt to find an existing product by barcode first to avoid
-    // creating duplicates when syncing remote records that use different ids.
+    // All reads must complete before opening the write transaction
+    // (reusing a readwrite tx across await boundaries causes auto-commit errors)
     let existing = null
     try {
       if (product.barcode) {
-        existing = await tx.store.index('barcode').get(product.barcode)
+        existing = await db.getFromIndex('products', 'barcode', product.barcode)
       }
     } catch (_err) {
-      // Index might not exist in older DB versions - ignore and continue
       existing = null
     }
-
-    // If no match by barcode, try matching by provided id
     if (!existing && product.id) {
-      existing = await tx.store.get(product.id)
+      existing = await db.get('products', product.id)
     }
 
     let productData
     if (existing) {
-      // Merge records - prefer the most recently updated
       const existingTime = new Date(existing.updated_at || existing.updatedAt || 0)
       const remoteTime = new Date(product.updated_at || product.updatedAt || 0)
-
       productData =
         remoteTime >= existingTime ? { ...existing, ...product } : { ...product, ...existing }
-
-      // Ensure we keep the local numeric id when present
       if (existing.id !== undefined) productData.id = existing.id
     } else {
       productData = { ...product }
     }
-
-    // Ensure normalized name
     if (productData.name && !productData.normalizedName) {
       productData.normalizedName = normalizeText(productData.name)
     }
-
-    // Put will insert or update using the keyPath; prefer put so provided ids (UUIDs)
-    // from remote are preserved when needed, but if we matched an existing record
-    // the existing numeric id will be used.
+    // Now open a fresh write transaction
+    const tx = db.transaction('products', 'readwrite')
     await tx.store.put(productData)
     await tx.done
-
     return productData.id
   } catch (error) {
     console.error('Failed to upsert product:', error)
@@ -1322,25 +1302,22 @@ export const deleteInventoryItem = async (id, hard = false) => {
 export const upsertInventoryItem = async (item) => {
   try {
     const db = await initDB()
-    const tx = db.transaction('inventory', 'readwrite')
-    const existing = await tx.store.get(item.id)
-
+    // Read first (auto-transaction via db.get shorthand)
+    const existing = await db.get('inventory', item.id)
     let itemData
     if (existing) {
-      // Merge, keeping newer data (conflict resolution)
       const existingTime = new Date(
         existing.updated_at || existing.updatedAt || existing.lastCheckedAt || 0,
       )
       const remoteTime = new Date(item.updated_at || item.updatedAt || item.lastCheckedAt || 0)
-
       itemData = remoteTime >= existingTime ? item : existing
     } else {
       itemData = item
     }
-
+    // Write in a fresh transaction
+    const tx = db.transaction('inventory', 'readwrite')
     await tx.store.put(itemData)
     await tx.done
-
     return itemData.id
   } catch (error) {
     console.error('Failed to upsert inventory item:', error)
@@ -1521,6 +1498,7 @@ const DEFAULT_FIELD_PREFERENCES = {
  * Get field preferences for the user
  * Returns default preferences if not set
  */
+export const getFieldPreferences = async () => {
   try {
     // Try cloud first if online and authenticated
     if (isNhostConfigured() && isNhostAuthenticated()) {
@@ -1549,6 +1527,7 @@ const DEFAULT_FIELD_PREFERENCES = {
  * Set field preferences
  * @param {Object} preferences - Field preferences object
  */
+export const setFieldPreferences = async (preferences) => {
   try {
     const merged = { ...DEFAULT_FIELD_PREFERENCES, ...preferences };
     // Save to cloud if online and authenticated
@@ -1781,15 +1760,15 @@ export const markSyncFailed = async (syncId, errorMessage) => {
 export const clearSyncLog = async () => {
   try {
     const db = await initDB()
+    // Read all logs first (auto-transaction)
+    const logs = await db.getAll('sync_log')
+    const toDelete = logs.filter((log) => log.status === 'synced').map((log) => log.id).filter(Boolean)
+    if (toDelete.length === 0) return
+    // Delete in a fresh write transaction
     const tx = db.transaction('sync_log', 'readwrite')
-
-    const logs = await tx.store.getAll()
-    for (const log of logs) {
-      if (log.status === 'synced') {
-        await tx.store.delete(log.createdAt)
-      }
+    for (const id of toDelete) {
+      tx.store.delete(id)  // queue all deletes synchronously, no await between
     }
-
     await tx.done
     console.log('[SYNC] Cleared synced entries from sync log')
   } catch (error) {
@@ -2017,20 +1996,18 @@ export const fetchFromCloud = async (householdId) => {
 export const updateInventoryItemForce = async (id, updates) => {
   try {
     const db = await initDB()
-    const tx = db.transaction('inventory', 'readwrite')
-    const item = await tx.store.get(id)
-
+    // Read with auto-transaction shorthand, then write in a fresh transaction
+    const item = await db.get('inventory', id)
     if (!item) {
       throw new Error(`Inventory item with ID ${id} not found`)
     }
-
     const updatedItem = {
       ...item,
       ...updates,
       lastCheckedAt: new Date().toISOString(),
-      syncedAt: null, // Mark as needing sync
+      syncedAt: null,
     }
-
+    const tx = db.transaction('inventory', 'readwrite')
     await tx.store.put(updatedItem)
     await tx.done
 

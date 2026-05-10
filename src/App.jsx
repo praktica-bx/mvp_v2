@@ -22,14 +22,8 @@ import { useTheme } from './hooks/useTheme'
 import { getInventoryStats, getPendingSyncs, getInventoryByDsbCategory, fetchFromCloud, syncToCloud } from './database'
 import { calculateDsbCompleteness } from './constants/dsb-baseline'
 
-  const theme = useTheme() // Initialize theme system and get loadingTheme
-    // On startup, always load/sync user settings (theme, etc.) from cloud if online and authenticated
-    useEffect(() => {
-      // theme hook already loads theme from cloud on mount if possible
-      // Add other settings sync here if needed in the future
-      // (Field preferences, storage locations, etc. are already handled in their own hooks/components)
-      // This ensures theme and any future user settings are always loaded from the cloud on startup
-    }, [isAuthenticated, nhostConfigured]);
+export default function App() {
+  useTheme() // Initialize theme system (loads/saves theme from/to cloud)
   const { user, isAuthenticated, isLoading: authLoading, handleAuthSuccess, logout, nhostConfigured } = useAuth()
   const { households, currentHousehold, isLoading: householdLoading, createNewHousehold, selectHousehold, joinHousehold, leaveHousehold, deleteHousehold, renameHousehold, inviteMember, removeMember, isFirstTime, isOfflineFallback } = useHousehold({ isAuthenticated })
   const [stats, setStats] = useState({ totalItems: 0, expiringSoon: 0, completeness: 0, inventoryByCategory: {} })
