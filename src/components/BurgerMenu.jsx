@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Smartphone, Plus, Settings, X, LogOut, Home, ChevronRight } from 'lucide-react';
 import { ThemeSwitcherFull } from './ThemeSwitcher';
 import './BurgerMenu.css';
@@ -18,6 +18,19 @@ export default function BurgerMenu({
   onViewPreparedness
 }) {
   const [isOpen, setIsOpen] = useState(false);
+
+
+  // Prevent background scroll when menu is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   const handleMenuClick = (callback) => {
     callback();
