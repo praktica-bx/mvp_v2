@@ -35,7 +35,7 @@ create table if not exists public.products (
 -- inventory
 create table if not exists public.inventory (
   id uuid primary key default gen_random_uuid(),
-  household_id uuid references public.households(id),
+  household_id uuid references public.households(id) on delete cascade,
   user_id uuid,
   product_id uuid references public.products(id),
   barcode text,
