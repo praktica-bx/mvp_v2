@@ -6,6 +6,8 @@ import {
   deleteInventoryBatch,
   getInventoryById,
   getInventoryChangesSince,
+  upsertFieldPreferences,
+  fetchFieldPreferences,
 } from './nhost'
 
 // Re-export nhost helper so consumers can import from `../database`
@@ -1538,17 +1540,27 @@ const DEFAULT_FIELD_PREFERENCES = {
  * Get field preferences for the user
  * Returns default preferences if not set
  */
-export const getFieldPreferences = async () => {
   try {
-    const prefs = await getSetting('fieldPreferences')
-    if (!prefs) {
-      return DEFAULT_FIELD_PREFERENCES
+    // Try cloud first if online and authenticated
+    if (isNhostConfigured() && isNhostAuthenticated()) {
+      try {
+        const cloudPrefs = await fetchFieldPreferences();
+        if (cloudPrefs) {
+          // Also update local cache for offline use
+          await setSetting('fieldPreferences', cloudPrefs);
+          return { ...DEFAULT_FIELD_PREFERENCES, ...cloudPrefs };
+        }
+      } catch (e) {
+        console.warn('Cloud fetchFieldPreferences failed, falling back to local:', e.message || e);
+      }
     }
-    // Merge with defaults to ensure new fields are included
-    return { ...DEFAULT_FIELD_PREFERENCES, ...prefs }
+    // Fallback to local IndexedDB
+    const prefs = await getSetting('fieldPreferences');
+    if (!prefs) return DEFAULT_FIELD_PREFERENCES;
+    return { ...DEFAULT_FIELD_PREFERENCES, ...prefs };
   } catch (error) {
-    console.error('Failed to get field preferences:', error)
-    return DEFAULT_FIELD_PREFERENCES
+    console.error('Failed to get field preferences:', error);
+    return DEFAULT_FIELD_PREFERENCES;
   }
 }
 
@@ -1556,14 +1568,21 @@ export const getFieldPreferences = async () => {
  * Set field preferences
  * @param {Object} preferences - Field preferences object
  */
-export const setFieldPreferences = async (preferences) => {
   try {
-    const merged = { ...DEFAULT_FIELD_PREFERENCES, ...preferences }
-    await setSetting('fieldPreferences', merged)
-    return merged
+    const merged = { ...DEFAULT_FIELD_PREFERENCES, ...preferences };
+    // Save to cloud if online and authenticated
+    if (isNhostConfigured() && isNhostAuthenticated()) {
+      try {
+        await upsertFieldPreferences(merged);
+      } catch (e) {
+        console.warn('Cloud upsertFieldPreferences failed, saving local only:', e.message || e);
+      }
+    }
+    await setSetting('fieldPreferences', merged);
+    return merged;
   } catch (error) {
-    console.error('Failed to set field preferences:', error)
-    throw new Error(`Failed to save field preferences: ${error.message}`)
+    console.error('Failed to set field preferences:', error);
+    throw new Error(`Failed to save field preferences: ${error.message}`);
   }
 }
 

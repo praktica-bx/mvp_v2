@@ -1,25 +1,30 @@
+
 import { useState, useEffect } from 'react';
 import { getTheme, getThemeNames, defaultTheme } from '../constants/themes';
+import { isNhostConfigured, isNhostAuthenticated, fetchThemeSetting, upsertThemeSetting } from '../nhost';
 
 const THEME_STORAGE_KEY = 'emergency-supply-theme';
 
+
 export const useTheme = () => {
   const [currentTheme, setCurrentTheme] = useState(() => {
-    // Try to get saved theme from localStorage
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
       return saved || defaultTheme;
     }
     return defaultTheme;
   });
+  const [loadingTheme, setLoadingTheme] = useState(false);
+
 
   const [themeData, setThemeData] = useState(getTheme(currentTheme));
 
-  // Update CSS variables when theme changes
+
+  // Update CSS variables and persist theme when it changes
   useEffect(() => {
     const theme = getTheme(currentTheme);
     setThemeData(theme);
-    
+
     // Apply theme colors to CSS variables
     const root = document.documentElement;
     Object.entries(theme.colors).forEach(([key, value]) => {
@@ -28,7 +33,6 @@ export const useTheme = () => {
     });
 
     // Expose an active household color variable that UI can reference.
-    // Prefer named theme tokens rather than hard-coded literals.
     let activeColor = '';
     if (currentTheme === 'dark') {
       activeColor = theme.colors.warning || theme.colors.amber500 || theme.colors.orange500 || 'var(--color-warning)';
@@ -39,13 +43,45 @@ export const useTheme = () => {
 
     // Save to localStorage
     localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
+
+    // Save to cloud if online and authenticated
+    if (isNhostConfigured() && isNhostAuthenticated()) {
+      upsertThemeSetting(currentTheme).catch((e) => {
+        // Non-fatal: just log
+        console.warn('Cloud upsertThemeSetting failed:', e.message || e);
+      });
+    }
   }, [currentTheme]);
+
+  // On mount, try to load theme from cloud if online and authenticated
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCloudTheme() {
+      if (isNhostConfigured() && isNhostAuthenticated()) {
+        setLoadingTheme(true);
+        try {
+          const cloudTheme = await fetchThemeSetting();
+          if (cloudTheme && getThemeNames().includes(cloudTheme)) {
+            if (!cancelled) setCurrentTheme(cloudTheme);
+          }
+        } catch (e) {
+          console.warn('Cloud fetchThemeSetting failed:', e.message || e);
+        } finally {
+          if (!cancelled) setLoadingTheme(false);
+        }
+      }
+    }
+    loadCloudTheme();
+    return () => { cancelled = true; };
+  }, []);
+
 
   const switchTheme = (themeName) => {
     if (getThemeNames().includes(themeName)) {
       setCurrentTheme(themeName);
     }
   };
+
 
   const nextTheme = () => {
     const themes = getThemeNames();
@@ -60,5 +96,6 @@ export const useTheme = () => {
     switchTheme,
     nextTheme,
     availableThemes: getThemeNames(),
+    loadingTheme,
   };
 };

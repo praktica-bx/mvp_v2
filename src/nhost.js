@@ -1,3 +1,114 @@
+/**
+ * Upsert theme setting for the current user/household in Nhost
+ * @param {string} theme - Theme name (e.g., 'light', 'dark')
+ * @param {string|null} householdId - Household ID (optional)
+ */
+export const upsertThemeSetting = async (theme, householdId = null) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const user = getNhostUser();
+  if (!user) throw new Error('Not authenticated');
+  const mutation = `
+    mutation UpsertUserSettings($userId: uuid!, $householdId: uuid, $settings: jsonb!) {
+      insert_user_settings_one(
+        object: { user_id: $userId, household_id: $householdId, settings: $settings },
+        on_conflict: { constraint: user_settings_user_id_household_id_key, update_columns: [settings, updated_at] }
+      ) {
+        id
+        settings
+        updated_at
+      }
+    }
+  `;
+  const variables = {
+    userId: user.id,
+    householdId,
+    settings: { theme },
+  };
+  const result = await nhostClient.graphql.request({ query: mutation, variables });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to upsert theme');
+  return (result.body || result).data?.insert_user_settings_one?.settings?.theme || null;
+};
+
+/**
+ * Fetch theme setting for the current user/household from Nhost
+ * @param {string|null} householdId - Household ID (optional)
+ */
+export const fetchThemeSetting = async (householdId = null) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const user = getNhostUser();
+  if (!user) throw new Error('Not authenticated');
+  const query = `
+    query GetUserSettings($userId: uuid!, $householdId: uuid) {
+      user_settings(where: { user_id: { _eq: $userId }, household_id: { _eq: $householdId } }) {
+        settings
+        updated_at
+      }
+    }
+  `;
+  const variables = { userId: user.id, householdId };
+  const result = await nhostClient.graphql.request({ query, variables });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch theme');
+  const settings = (result.body || result).data?.user_settings?.[0]?.settings;
+  return settings?.theme || null;
+};
+// Field Preferences Cloud Sync (user_settings table)
+/**
+ * Upsert field preferences for the current user/household in Nhost
+ * @param {object} preferences - Field preferences object
+ * @param {string} householdId - Household ID (optional, for per-household prefs)
+ */
+export const upsertFieldPreferences = async (preferences, householdId = null) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const user = getNhostUser();
+  if (!user) throw new Error('Not authenticated');
+  const mutation = `
+    mutation UpsertUserSettings($userId: uuid!, $householdId: uuid, $settings: jsonb!) {
+      insert_user_settings_one(
+        object: { user_id: $userId, household_id: $householdId, settings: $settings }, 
+        on_conflict: { constraint: user_settings_user_id_household_id_key, update_columns: [settings, updated_at] }
+      ) {
+        id
+        settings
+        updated_at
+      }
+    }
+  `;
+  const variables = {
+    userId: user.id,
+    householdId,
+    settings: { fieldPreferences: preferences },
+  };
+  const result = await nhostClient.graphql.request({ query: mutation, variables });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to upsert field preferences');
+  return (result.body || result).data?.insert_user_settings_one?.settings?.fieldPreferences || null;
+};
+
+/**
+ * Fetch field preferences for the current user/household from Nhost
+ * @param {string} householdId - Household ID (optional, for per-household prefs)
+ */
+export const fetchFieldPreferences = async (householdId = null) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const user = getNhostUser();
+  if (!user) throw new Error('Not authenticated');
+  const query = `
+    query GetUserSettings($userId: uuid!, $householdId: uuid) {
+      user_settings(where: { user_id: { _eq: $userId }, household_id: { _eq: $householdId } }) {
+        settings
+        updated_at
+      }
+    }
+  `;
+  const variables = { userId: user.id, householdId };
+  const result = await nhostClient.graphql.request({ query, variables });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch field preferences');
+  const settings = (result.body || result).data?.user_settings?.[0]?.settings;
+  return settings?.fieldPreferences || null;
+};
 import {
   signUpLocal,
   signInLocal,
