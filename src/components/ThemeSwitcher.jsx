@@ -1,3 +1,4 @@
+import React from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { getTheme } from '../constants/themes';
 import { Sun, Moon, RefreshCw } from 'lucide-react';
@@ -20,23 +21,23 @@ export function ThemeSwitcherFull() {
           >
             <span className="theme-name">{themeData.name}</span>
             <div className="theme-preview">
-              <span 
-                className="color-swatch" 
+              <span
+                className="color-swatch"
                 style={{ backgroundColor: themeData.colors.primary }}
                 title="Primary"
               />
-              <span 
-                className="color-swatch" 
+              <span
+                className="color-swatch"
                 style={{ backgroundColor: themeData.colors.accent1 }}
                 title="Accent 1"
               />
-              <span 
-                className="color-swatch" 
+              <span
+                className="color-swatch"
                 style={{ backgroundColor: themeData.colors.accent2 }}
                 title="Accent 2"
               />
-              <span 
-                className="color-swatch" 
+              <span
+                className="color-swatch"
                 style={{ backgroundColor: themeData.colors.accent3 }}
                 title="Accent 3"
               />
@@ -48,25 +49,23 @@ export function ThemeSwitcherFull() {
   );
 }
 
+export default function ThemeSwitcher() {
   const { currentTheme, switchTheme } = useTheme();
   const [syncing, setSyncing] = React.useState(false);
-  const [syncResult, setSyncResult] = React.useState(null);
 
   const handleSync = async () => {
     setSyncing(true);
-    setSyncResult(null);
     try {
-      const result = await syncToCloud();
-      setSyncResult(result);
+      await syncToCloud();
     } catch (e) {
-      setSyncResult({ success: false, error: e.message });
+      console.warn('Sync failed:', e.message);
     } finally {
       setSyncing(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
       <button
         className="theme-icon-toggle"
         onClick={handleSync}
@@ -87,3 +86,4 @@ export function ThemeSwitcherFull() {
     </div>
   );
 }
+
