@@ -14,7 +14,7 @@
     "ci:color-check": "npm run lint:styles && npm run check:colors",
     "prepare": "husky install",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist"
+    "deploy": "vite build && gh-pages -d dist"
   },
   "dependencies": {
     "@ericblade/quagga2": "^1.12.1",

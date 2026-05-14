@@ -7,6 +7,7 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState([])
   const [error, setError] = useState(null)
+  const [norwayOnly, setNorwayOnly] = useState(true)
 
   const modalRef = useRef(null)
   const inputRef = useRef(null)
@@ -48,7 +49,7 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
     setLoading(true)
     setError(null)
     try {
-      const res = await searchProducts(query)
+      const res = await searchProducts(query, 1, 20, norwayOnly ? 'en:norway' : null)
       setResults(res.products || [])
     } catch (err) {
       console.error('Search error', err)
@@ -81,9 +82,18 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
             onKeyDown={(e) => e.key === 'Enter' && query && !loading && doSearch()}
             placeholder="Search product name"
             aria-label="Search product name"
+            style={{ flex: 1 }}
           />
           <button className="btn btn-primary" onClick={doSearch} disabled={!query || loading}>{loading ? 'Searching…' : 'Search'}</button>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 8, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={norwayOnly}
+            onChange={(e) => setNorwayOnly(e.target.checked)}
+          />
+          Norway only
+        </label>
 
         {error && <div className="off-error">⚠ {error} — check your internet connection and try again.</div>}
 
