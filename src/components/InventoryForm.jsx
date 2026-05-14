@@ -165,8 +165,10 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
 
   const applyOpenFoodFacts = (prod) => {
     if (!prod) return;
-    setFormData({
+    console.log('[applyOpenFoodFacts] Product received:', prod);
+    setFormData(prev => ({
       ...EMPTY_FORM,
+      ...prev, // preserve any user input not covered by OFF
       productName: prod.product_name || prod.product_name_en || prod.generic_name || prod.productName || '',
       barcode: prod.code || prod.barcode || '',
       brand: prod.brands || prod.brand || '',
@@ -192,7 +194,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       caloriesPerServing: prod.nutriments?.['energy-kcal_serving'] || '',
       servingsPerPackage: prod.serving_size || '',
       // Add more mappings as needed
-    });
+    }));
   }
 
   const doLookupBarcode = async (barcode) => {
@@ -765,7 +767,15 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           </div>
         </form>
       </div>
-      <OpenFoodFactsSearchModal isOpen={ofModalOpen} onClose={() => setOfModalOpen(false)} onSelect={(p) => { applyOpenFoodFacts(p); setOfModalOpen(false) }} />
+      <OpenFoodFactsSearchModal
+        isOpen={ofModalOpen}
+        onClose={() => setOfModalOpen(false)}
+        onSelect={(p) => {
+          // Fill the form, then close the modal after a tick to ensure state update
+          applyOpenFoodFacts(p);
+          setTimeout(() => setOfModalOpen(false), 0);
+        }}
+      />
     </div>
   )
 }
