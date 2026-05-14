@@ -1488,6 +1488,9 @@ export const getSetting = async (key) => {
  * @param {string} key - Setting key
  * @param {*} value - Setting value
  */
+// Keys that are internal/system and should never be added to sync_log
+const SYSTEM_SETTING_KEYS = /^lastSync/
+
 export const setSetting = async (key, value) => {
   try {
     const db = await initDB()
@@ -1502,8 +1505,11 @@ export const setSetting = async (key, value) => {
 
     await tx.done
 
-    // Track change for sync
-    await trackChange('settings', key, 'update')
+    // Don't track system/internal settings — they would clog the sync_log
+    // and never get cleared since syncToCloud only handles 'inventory' table
+    if (!SYSTEM_SETTING_KEYS.test(key)) {
+      await trackChange('settings', key, 'update')
+    }
   } catch (error) {
     console.error('Failed to set setting:', error)
     throw new Error(`Failed to save setting: ${error.message}`)

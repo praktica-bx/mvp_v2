@@ -493,11 +493,18 @@ export const getNhostUser = () => {
   // v4: user is stored separately in localStorage (sessionStorage only keeps tokens)
   const session = nhostClient.sessionStorage ? nhostClient.sessionStorage.get() : null
   if (!session) return null
+  // 1. Try localStorage (written at sign-in)
   try {
-    return JSON.parse(localStorage.getItem('nhostUser') || 'null')
-  } catch {
-    return null
+    const stored = JSON.parse(localStorage.getItem('nhostUser') || 'null')
+    if (stored && stored.id) return stored
+  } catch {}
+  // 2. Fall back to session.user (some SDK versions embed it)
+  if (session.user && session.user.id) {
+    // Cache it for next calls
+    try { localStorage.setItem('nhostUser', JSON.stringify(session.user)) } catch {}
+    return session.user
   }
+  return null
 }
 
 /**
