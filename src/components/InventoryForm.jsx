@@ -90,30 +90,18 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       try {
         const item = await getInventoryItem(itemId)
         if (item) {
-          // Robustly parse expiryDate for input type="month"
+          // Only use MM.YYYY for expiryDate
           let expiryRaw = item.expiryDate || item.expiry_date || '';
           let expiryDate = '';
-          if (expiryRaw) {
-            if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
-              // MM.YYYY → YYYY-MM
-              const [mm, yyyy] = expiryRaw.split('.');
-              expiryDate = `${yyyy}-${mm}`;
-            } else if (/^\d{4}-\d{2}$/.test(expiryRaw)) {
-              // YYYY-MM
-              expiryDate = expiryRaw;
-            } else if (/^\d{4}-\d{2}-\d{2}/.test(expiryRaw)) {
-              // YYYY-MM-DD or ISO
-              expiryDate = expiryRaw.slice(0, 7);
-            } else {
-              // Try parsing as Date
-              const d = new Date(expiryRaw);
-              if (!isNaN(d)) {
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const year = d.getFullYear();
-                expiryDate = `${year}-${month}`;
-              } else {
-                expiryDate = '';
-              }
+          if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
+            expiryDate = expiryRaw;
+          } else if (expiryRaw) {
+            // Try to parse ISO or other formats to MM.YYYY
+            const d = new Date(expiryRaw);
+            if (!isNaN(d)) {
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const yyyy = d.getFullYear();
+              expiryDate = `${mm}.${yyyy}`;
             }
           }
           setFormData({
@@ -232,10 +220,14 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
 
       // Save ALL fields from formData, converting arrays to comma-separated strings for DB
       const itemToSave = { ...formData }
-      // Convert expiryDate from YYYY-MM to MM.YYYY for storage
-      if (itemToSave.expiryDate && /^\d{4}-\d{2}$/.test(itemToSave.expiryDate)) {
-        const [year, month] = itemToSave.expiryDate.split('-');
-        itemToSave.expiryDate = `${month}.${year}`;
+      // Ensure expiryDate is MM.YYYY for storage
+      if (itemToSave.expiryDate && !/^\d{2}\.\d{4}$/.test(itemToSave.expiryDate)) {
+        const d = new Date(itemToSave.expiryDate);
+        if (!isNaN(d)) {
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const yyyy = d.getFullYear();
+          itemToSave.expiryDate = `${mm}.${yyyy}`;
+        }
       }
       // Convert array fields to comma-separated strings for DB storage
       if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
@@ -393,14 +385,17 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             <label htmlFor={fieldName}>{label}</label>
             <input
               id={fieldName}
-              type="month"
+              type="text"
               name={fieldName}
               value={value}
               onChange={handleChange}
               required={config.mandatory}
-              pattern="\d{4}-\d{2}"
+              pattern="\d{2}\.\d{4}"
+              placeholder="MM.YYYY"
+              inputMode="numeric"
+              maxLength={7}
             />
-            <small>Format: MM.YYYY</small>
+            <small>Format: MM.YYYY (e.g. 05.2026)</small>
           </div>
         )
       case 'allergens':
