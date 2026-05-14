@@ -12,7 +12,11 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
   const inputRef = useRef(null)
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      setResults([])
+      setError(null)
+      return
+    }
     // focus the search input when modal opens
     inputRef.current?.focus()
 
@@ -70,13 +74,23 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search product name" aria-label="Search product name" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && query && !loading && doSearch()}
+            placeholder="Search product name"
+            aria-label="Search product name"
+          />
           <button className="btn btn-primary" onClick={doSearch} disabled={!query || loading}>{loading ? 'Searching…' : 'Search'}</button>
         </div>
 
-        {error && <div className="off-error">{error}</div>}
+        {error && <div className="off-error">⚠ {error} — check your internet connection and try again.</div>}
 
         <div className="off-results">
+          {!loading && !error && results.length === 0 && query && (
+            <div style={{ padding: '1rem', opacity: 0.6, textAlign: 'center' }}>No results found for "{query}"</div>
+          )}
           {results.map((p) => (
             <div key={p.id || p.code} className="off-result-item">
               <div style={{ flex: 1 }}>
