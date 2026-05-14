@@ -1,8 +1,11 @@
-const OF_BASE = 'https://world.openfoodfacts.org'
+const OF_WORLD = 'https://world.openfoodfacts.org'
+const OF_NO = 'https://no.openfoodfacts.org'
+
+const FIELDS = 'code,product_name,product_name_en,generic_name,brands,quantity,categories_tags,allergens_tags,ingredients_text,countries_tags,packaging,nutrition_grades_tags,nutriments,serving_size,stores'
 
 export const lookupByBarcode = async (barcode) => {
   if (!barcode) throw new Error('barcode required')
-  const url = `${OF_BASE}/api/v0/product/${encodeURIComponent(barcode)}.json`
+  const url = `${OF_WORLD}/api/v0/product/${encodeURIComponent(barcode)}.json`
   const res = await fetch(url)
   if (!res.ok) throw new Error('OpenFoodFacts lookup failed')
   const data = await res.json()
@@ -10,16 +13,18 @@ export const lookupByBarcode = async (barcode) => {
   return data.product
 }
 
-export const searchProducts = async (query, page = 1, pageSize = 20, countryTag = null) => {
+export const searchProducts = async (query, page = 1, pageSize = 20, norwayOnly = false) => {
+  const base = norwayOnly ? OF_NO : OF_WORLD
   const params = new URLSearchParams({
     search_terms: query,
+    search_simple: '1',
+    action: 'process',
     page: String(page),
     page_size: String(pageSize),
     json: '1',
-    fields: 'code,product_name,product_name_en,generic_name,brands,quantity,categories_tags,allergens_tags,ingredients_text,countries_tags,packaging,nutrition_grades_tags,nutriments,serving_size,stores',
+    fields: FIELDS,
   })
-  if (countryTag) params.set('countries_tags', countryTag)
-  const url = `${OF_BASE}/api/v2/search?${params.toString()}`
+  const url = `${base}/cgi/search.pl?${params.toString()}`
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`Search failed (${res.status})`)
   const data = await res.json()

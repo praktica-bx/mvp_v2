@@ -49,7 +49,7 @@ export default function OpenFoodFactsSearchModal({ isOpen, onClose, onSelect }) 
     setLoading(true)
     setError(null)
     try {
-      const res = await searchProducts(query, 1, 20, norwayOnly ? 'en:norway' : null)
+      const res = await searchProducts(query, 1, 20, norwayOnly)
       setResults(res.products || [])
     } catch (err) {
       console.error('Search error', err)

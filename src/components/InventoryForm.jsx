@@ -166,6 +166,13 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   const applyOpenFoodFacts = (prod) => {
     if (!prod) return;
     console.log('[applyOpenFoodFacts] Product received:', prod);
+    // Normalize allergen tags to plain names (e.g., en:milk -> milk)
+    let allergens = [];
+    if (Array.isArray(prod.allergens_tags)) {
+      allergens = prod.allergens_tags.map(tag => tag.split(':')[1] || tag);
+    } else if (prod.allergens_tags) {
+      allergens = prod.allergens_tags.split(',').map(tag => tag.split(':')[1] || tag);
+    }
     setFormData(prev => ({
       ...EMPTY_FORM,
       ...prev, // preserve any user input not covered by OFF
@@ -178,7 +185,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       nutritionInfo: prod.nutrition_grades_tags?.join(', ') || '',
       packageSize: prod.quantity || '',
       category: (prod.categories_tags && prod.categories_tags[0]) || prod.category || 'water',
-      allergens: Array.isArray(prod.allergens_tags) ? prod.allergens_tags : (prod.allergens_tags ? prod.allergens_tags.split(',') : []),
+      allergens,
       dietaryRestrictions: Array.isArray(prod.dietary_tags) ? prod.dietary_tags : (prod.dietary_tags ? prod.dietary_tags.split(',') : []),
       storageNotes: prod.storage_notes || '',
       supplier: prod.stores || '',
