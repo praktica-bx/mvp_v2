@@ -1,3 +1,81 @@
+// ============================================================================
+// STORAGE LOCATIONS CLOUD SYNC
+// ============================================================================
+
+export const fetchStorageLocations = async (householdId) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return [];
+  const query = `
+    query GetStorageLocations($householdId: uuid!) {
+      storage_locations(where: { household_id: { _eq: $householdId } }, order_by: { created_at: asc }) {
+        id
+        name
+        household_id
+        user_id
+        created_at
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({ query, variables: { householdId } });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch storage locations');
+  return (result.body || result).data?.storage_locations || [];
+};
+
+export const insertStorageLocation = async (householdId, name) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const user = getNhostUser();
+  if (!user) throw new Error('Not authenticated');
+  const mutation = `
+    mutation InsertStorageLocation($householdId: uuid!, $userId: uuid!, $name: String!) {
+      insert_storage_locations_one(object: { household_id: $householdId, user_id: $userId, name: $name }) {
+        id
+        name
+        household_id
+        user_id
+        created_at
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({ query: mutation, variables: { householdId, userId: user.id, name } });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to insert storage location');
+  return (result.body || result).data?.insert_storage_locations_one || null;
+};
+
+export const updateStorageLocation = async (id, name) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const mutation = `
+    mutation UpdateStorageLocation($id: uuid!, $name: String!) {
+      update_storage_locations_by_pk(pk_columns: { id: $id }, _set: { name: $name }) {
+        id
+        name
+        household_id
+        user_id
+        created_at
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({ query: mutation, variables: { id, name } });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to update storage location');
+  return (result.body || result).data?.update_storage_locations_by_pk || null;
+};
+
+export const deleteStorageLocation = async (id) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) return null;
+  const mutation = `
+    mutation DeleteStorageLocation($id: uuid!) {
+      delete_storage_locations_by_pk(id: $id) {
+        id
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({ query: mutation, variables: { id } });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to delete storage location');
+  return (result.body || result).data?.delete_storage_locations_by_pk || null;
+};
+
 /**
  * Upsert theme setting for the current user/household in Nhost
  * @param {string} theme - Theme name (e.g., 'light', 'dark')

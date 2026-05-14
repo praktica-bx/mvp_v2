@@ -11,6 +11,21 @@
   color: var(--color-primary);
 }
 
+.theme-icon-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .theme-icon-toggle:hover {
   transform: scale(1.1);
 }

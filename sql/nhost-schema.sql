@@ -88,6 +88,15 @@ create table if not exists public.sync_log (
   synced_at timestamptz
 );
 
+-- Storage locations table for cloud sync
+create table if not exists public.storage_locations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null, -- who created the location
+  household_id uuid not null references public.households(id) on delete cascade,
+  name text not null,
+  created_at timestamptz default now()
+);
+
 -- Indexes
 create index if not exists idx_inventory_household_id on public.inventory(household_id);
 create index if not exists idx_inventory_user_id on public.inventory(user_id);

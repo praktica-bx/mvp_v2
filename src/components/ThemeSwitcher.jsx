@@ -1,7 +1,8 @@
 import { useTheme } from '../hooks/useTheme';
 import { getTheme } from '../constants/themes';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, RefreshCw } from 'lucide-react';
 import './ThemeSwitcher.css';
+import { syncToCloud } from '../database';
 
 export function ThemeSwitcherFull() {
   const { currentTheme, switchTheme, availableThemes } = useTheme();
@@ -47,16 +48,42 @@ export function ThemeSwitcherFull() {
   );
 }
 
-export default function ThemeSwitcher() {
   const { currentTheme, switchTheme } = useTheme();
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncResult, setSyncResult] = React.useState(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await syncToCloud();
+      setSyncResult(result);
+    } catch (e) {
+      setSyncResult({ success: false, error: e.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
-    <button 
-      className="theme-icon-toggle"
-      onClick={() => switchTheme(currentTheme === 'light' ? 'dark' : 'light')}
-      title={`Switch to ${currentTheme === 'light' ? 'Dark' : 'Light'} mode`}
-    >
-      {currentTheme === 'light' ? <Sun size={24} /> : <Moon size={24} />}
-    </button>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <button
+        className="theme-icon-toggle"
+        onClick={handleSync}
+        title={syncing ? 'Syncing...' : 'Sync data to cloud'}
+        disabled={syncing}
+        aria-label="Sync data"
+      >
+        <RefreshCw size={22} className={syncing ? 'spin' : ''} />
+      </button>
+      <button
+        className="theme-icon-toggle"
+        onClick={() => switchTheme(currentTheme === 'light' ? 'dark' : 'light')}
+        title={`Switch to ${currentTheme === 'light' ? 'Dark' : 'Light'} mode`}
+        aria-label="Toggle light/dark mode"
+      >
+        {currentTheme === 'light' ? <Sun size={24} /> : <Moon size={24} />}
+      </button>
+    </div>
   );
 }

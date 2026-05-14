@@ -1,53 +1,52 @@
 import React, { useState, useEffect } from 'react'
 import './StorageLocations.css'
+import {
+  fetchStorageLocations,
+  insertStorageLocation,
+  updateStorageLocation,
+  deleteStorageLocation,
+  isNhostConfigured,
+  isNhostAuthenticated,
+} from '../nhost'
 
 export default function StorageLocations({ onClose, householdId }) {
   const [locations, setLocations] = useState([])
   const [newLocation, setNewLocation] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  const storageKey = householdId ? `storage-locations:${householdId}` : 'storage-locations'
+  const cloudEnabled = isNhostConfigured() && isNhostAuthenticated()
 
-  // Load locations from localStorage
+  // Load locations from cloud
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey)
-    if (saved) {
-      try {
-        setLocations(JSON.parse(saved))
-      } catch {
-        setLocations([])
-      }
-    } else {
-      setLocations([])
-    }
-  }, [storageKey])
+    if (!householdId || !cloudEnabled) return
+    setLoading(true)
+    fetchStorageLocations(householdId)
+      .then(setLocations)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [householdId, cloudEnabled])
 
-  const saveLocations = (updatedLocations) => {
-    setLocations(updatedLocations)
-    localStorage.setItem(storageKey, JSON.stringify(updatedLocations))
-    // Also keep the generic key in sync for fallback reads
-    localStorage.setItem('storage-locations', JSON.stringify(updatedLocations))
+  const addLocation = async () => {
+    if (!newLocation.trim() || !householdId) return
+    try {
+      const created = await insertStorageLocation(householdId, newLocation.trim())
+      if (created) setLocations((prev) => [...prev, created])
+      setNewLocation('')
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
-  const addLocation = () => {
-    if (!newLocation.trim()) return
-
-    const location = {
-      id: Date.now(),
-      name: newLocation,
-      itemCount: 0,
-    }
-
-    const updated = [...locations, location]
-    saveLocations(updated)
-    setNewLocation('')
-  }
-
-  const deleteLocation = (id) => {
-    if (window.confirm('Delete this storage location?')) {
-      const updated = locations.filter((loc) => loc.id !== id)
-      saveLocations(updated)
+  const deleteLocation = async (id) => {
+    if (!window.confirm('Delete this storage location?')) return
+    try {
+      await deleteStorageLocation(id)
+      setLocations((prev) => prev.filter((loc) => loc.id !== id))
+    } catch (e) {
+      setError(e.message)
     }
   }
 
@@ -56,15 +55,18 @@ export default function StorageLocations({ onClose, householdId }) {
     setEditingName(location.name)
   }
 
-  const saveEdit = (id) => {
+  const saveEdit = async (id) => {
     if (!editingName.trim()) return
-
-    const updated = locations.map((loc) =>
-      loc.id === id ? { ...loc, name: editingName } : loc
-    )
-    saveLocations(updated)
-    setEditingId(null)
-    setEditingName('')
+    try {
+      const updated = await updateStorageLocation(id, editingName.trim())
+      if (updated) {
+        setLocations((prev) => prev.map((loc) => (loc.id === id ? updated : loc)))
+      }
+      setEditingId(null)
+      setEditingName('')
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const cancelEdit = () => {
@@ -81,6 +83,17 @@ export default function StorageLocations({ onClose, householdId }) {
         </div>
 
         <div className="storage-content">
+          {!cloudEnabled && (
+            <p className="empty-message" style={{ color: 'var(--color-warning)' }}>
+              ⚠️ Not connected to cloud. Storage locations require an active login.
+            </p>
+          )}
+          {error && (
+            <p className="empty-message" style={{ color: 'var(--color-error)' }}>
+              Error: {error}
+            </p>
+          )}
+
           <div className="add-location-section">
             <h3>Add New Location</h3>
             <div className="add-location-form">
@@ -91,8 +104,9 @@ export default function StorageLocations({ onClose, householdId }) {
                 onKeyPress={(e) => e.key === 'Enter' && addLocation()}
                 placeholder="e.g., Kitchen Pantry, Basement, Garage..."
                 className="location-input"
+                disabled={!cloudEnabled}
               />
-              <button className="btn btn-primary" onClick={addLocation}>
+              <button className="btn btn-primary" onClick={addLocation} disabled={!cloudEnabled}>
                 Add
               </button>
             </div>
@@ -100,7 +114,9 @@ export default function StorageLocations({ onClose, householdId }) {
 
           <div className="locations-list">
             <h3>Your Storage Locations</h3>
-            {locations.length === 0 ? (
+            {loading ? (
+              <p className="empty-message">Loading...</p>
+            ) : locations.length === 0 ? (
               <p className="empty-message">No storage locations yet. Add one above!</p>
             ) : (
               <div className="location-items">
@@ -132,7 +148,6 @@ export default function StorageLocations({ onClose, householdId }) {
                       <>
                         <div className="location-info">
                           <span className="location-name">{location.name}</span>
-                          <span className="location-count">{location.itemCount || 0} items</span>
                         </div>
                         <div className="location-actions">
                           <button
@@ -164,7 +179,7 @@ export default function StorageLocations({ onClose, householdId }) {
               <li>Create locations for different areas of your home</li>
               <li>Select a location when adding items to track them</li>
               <li>Use categories like "Pantry", "Basement", "Garage", "Office"</li>
-              <li>Item counts update automatically as you add inventory</li>
+              <li>Storage locations are synced across all your devices</li>
             </ul>
           </div>
         </div>
