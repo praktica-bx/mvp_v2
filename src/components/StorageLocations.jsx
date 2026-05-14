@@ -7,6 +7,7 @@ import {
   deleteStorageLocation,
   isNhostConfigured,
   isNhostAuthenticated,
+  ensureNhostReady,
 } from '../nhost'
 
 export default function StorageLocations({ onClose, householdId }) {
@@ -14,20 +15,34 @@ export default function StorageLocations({ onClose, householdId }) {
   const [newLocation, setNewLocation] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editingName, setEditingName] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [cloudEnabled, setCloudEnabled] = useState(false)
 
-  const cloudEnabled = isNhostConfigured() && isNhostAuthenticated()
-
-  // Load locations from cloud
+  // Wait for Nhost to initialize before checking auth status
   useEffect(() => {
-    if (!householdId || !cloudEnabled) return
-    setLoading(true)
-    fetchStorageLocations(householdId)
-      .then(setLocations)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [householdId, cloudEnabled])
+    let cancelled = false
+    async function load() {
+      await ensureNhostReady()
+      const enabled = isNhostConfigured() && isNhostAuthenticated()
+      if (cancelled) return
+      setCloudEnabled(enabled)
+      if (!enabled || !householdId) {
+        setLoading(false)
+        return
+      }
+      try {
+        const locs = await fetchStorageLocations(householdId)
+        if (!cancelled) setLocations(locs)
+      } catch (e) {
+        if (!cancelled) setError(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [householdId])
 
   const addLocation = async () => {
     if (!newLocation.trim() || !householdId) return

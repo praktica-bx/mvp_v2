@@ -87,12 +87,18 @@ export default function InventoryList({ householdId, refreshKey, onEdit, onDelet
         if (!a.expiryDate) return 1
         if (!b.expiryDate) return -1
         return new Date(a.expiryDate) - new Date(b.expiryDate)
-      }
-      if (sortBy === 'name') {
-        return (a.productName || a.name || '').localeCompare(b.productName || b.name || '')
-      }
-      if (sortBy === 'category') {
-        return (a.category || '').localeCompare(b.category || '')
+          // If already MM.YYYY, return as is
+          if (/^\d{2}\.\d{4}$/.test(expiryDate)) {
+            return expiryDate
+          }
+          // Try to parse ISO or other formats
+          const d = new Date(expiryDate)
+          if (!isNaN(d)) {
+            const mm = String(d.getMonth() + 1).padStart(2, '0')
+            const yyyy = d.getFullYear()
+            return `${mm}.${yyyy}`
+          }
+          return expiryDate
       }
       if (sortBy === 'added') {
         return new Date(b.purchaseDate || 0) - new Date(a.purchaseDate || 0)

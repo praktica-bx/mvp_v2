@@ -3,6 +3,12 @@ import AllergenCheckboxes from './AllergenCheckboxes'
 import OpenFoodFactsSearchModal from './OpenFoodFactsSearchModal'
 import { useConflictModal } from '../contexts/ConflictModalContext'
 import {
+  fetchStorageLocations,
+  ensureNhostReady,
+  isNhostConfigured,
+  isNhostAuthenticated,
+} from '../nhost'
+import {
   addInventoryItem,
   getFieldPreferences,
   trackChange,
@@ -96,12 +102,18 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
             expiryDate = expiryRaw;
           } else if (expiryRaw) {
-            // Try to parse ISO or other formats to MM.YYYY
-            const d = new Date(expiryRaw);
-            if (!isNaN(d)) {
-              const mm = String(d.getMonth() + 1).padStart(2, '0');
-              const yyyy = d.getFullYear();
-              expiryDate = `${mm}.${yyyy}`;
+            // Try to parse DD.MM.YYYY or ISO or other formats to MM.YYYY
+            // If DD.MM.YYYY, split and use MM.YYYY
+            if (/^\d{2}\.\d{2}\.\d{4}$/.test(expiryRaw)) {
+              const [dd, mm, yyyy] = expiryRaw.split('.')
+              expiryDate = `${mm}.${yyyy}`
+            } else {
+              const d = new Date(expiryRaw);
+              if (!isNaN(d)) {
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                expiryDate = `${mm}.${yyyy}`;
+              }
             }
           }
           setFormData({
@@ -132,32 +144,55 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     }
   }, [scannedBarcode])
 
-  // Load storage locations
+  // Load storage locations from cloud
   useEffect(() => {
-    try {
-      let saved = null
-      if (householdId) saved = localStorage.getItem(`storage-locations:${householdId}`)
-      if (!saved) saved = localStorage.getItem('storage-locations')
-      if (saved) setStorageLocations(JSON.parse(saved))
-      else setStorageLocations([])
-    } catch (err) {
-      console.warn('Failed to load storage locations:', err)
-      setStorageLocations([])
+    let cancelled = false
+    async function load() {
+      if (!householdId) return
+      try {
+        await ensureNhostReady()
+        if (isNhostConfigured() && isNhostAuthenticated()) {
+          const locs = await fetchStorageLocations(householdId)
+          if (!cancelled) setStorageLocations(locs)
+        }
+      } catch (err) {
+        console.warn('Failed to load storage locations from cloud:', err)
+      }
     }
+    load()
+    return () => { cancelled = true }
   }, [householdId])
 
   const applyOpenFoodFacts = (prod) => {
-    if (!prod) return
-    setFormData((prev) => ({
-      ...prev,
-      productName: prod.productName || prev.productName,
-      barcode: prod.barcode || prev.barcode,
-      brand: prod.brand || prev.brand,
-      ingredients: prod.ingredients || prev.ingredients,
-      nutritionInfo: prod.nutritionInfo || prev.nutritionInfo,
-      packageSize: prod.packageSize || prev.packageSize,
-      category: prod.category || prev.category,
-    }))
+    if (!prod) return;
+    setFormData({
+      ...EMPTY_FORM,
+      productName: prod.product_name || prod.product_name_en || prod.generic_name || prod.productName || '',
+      barcode: prod.code || prod.barcode || '',
+      brand: prod.brands || prod.brand || '',
+      quantity: Number(prod.quantity) || 1,
+      unit: prod.unit || (prod.quantity && typeof prod.quantity === 'string' && prod.quantity.replace(/\d+/g, '').trim()) || 'pcs',
+      ingredients: prod.ingredients_text || prod.ingredients || '',
+      nutritionInfo: prod.nutrition_grades_tags?.join(', ') || '',
+      packageSize: prod.quantity || '',
+      category: (prod.categories_tags && prod.categories_tags[0]) || prod.category || 'water',
+      allergens: Array.isArray(prod.allergens_tags) ? prod.allergens_tags : (prod.allergens_tags ? prod.allergens_tags.split(',') : []),
+      dietaryRestrictions: Array.isArray(prod.dietary_tags) ? prod.dietary_tags : (prod.dietary_tags ? prod.dietary_tags.split(',') : []),
+      storageNotes: prod.storage_notes || '',
+      supplier: prod.stores || '',
+      preferredConsumptionDate: prod.preferred_consumption_date || '',
+      purchaseDate: prod.purchase_date || new Date().toISOString().split('T')[0],
+      cost: prod.price || '',
+      lotNumber: prod.lot_number || '',
+      packaging: prod.packaging || '',
+      countryOfOrigin: (prod.countries_tags && prod.countries_tags[0]) || '',
+      storageInstructions: prod.storage_instructions || '',
+      manufacturer: prod.manufacturer || '',
+      dosage: prod.dosage || '',
+      caloriesPerServing: prod.nutriments?.['energy-kcal_serving'] || '',
+      servingsPerPackage: prod.serving_size || '',
+      // Add more mappings as needed
+    });
   }
 
   const doLookupBarcode = async (barcode) => {
@@ -229,6 +264,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           itemToSave.expiryDate = `${mm}.${yyyy}`;
         }
       }
+        // If DD.MM.YYYY, convert to MM.YYYY
+        if (itemToSave.expiryDate && /^\d{2}\.\d{2}\.\d{4}$/.test(itemToSave.expiryDate)) {
+          const [dd, mm, yyyy] = itemToSave.expiryDate.split('.')
+          itemToSave.expiryDate = `${mm}.${yyyy}`
+        }
       // Convert array fields to comma-separated strings for DB storage
       if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
       if (Array.isArray(itemToSave.dietaryRestrictions)) itemToSave.dietaryRestrictions = itemToSave.dietaryRestrictions.join(',')

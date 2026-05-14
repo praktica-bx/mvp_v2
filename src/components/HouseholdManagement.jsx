@@ -1,4 +1,7 @@
 import { useState } from 'react'
+const COMMON_ALLERGENS = [
+  'milk', 'eggs', 'fish', 'shellfish', 'tree nuts', 'peanuts', 'wheat', 'soy', 'sesame', 'mustard', 'celery', 'sulphites', 'lupin', 'molluscs'
+]
 import './HouseholdManagement.css'
 import StorageLocations from './StorageLocations'
 import { getHouseholdInviteCode } from '../nhost'
@@ -216,9 +219,50 @@ export default function HouseholdManagement({
                                 alert('Removing members is not available in this mode.')
                               }
                             }}
+                            style={{ marginLeft: 8 }}
                           >
                             Remove
                           </button>
+                          <div className="member-allergies" style={{ marginTop: 8 }}>
+                            <label style={{ fontWeight: 500 }}>Allergies:</label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '4px 0' }}>
+                              {COMMON_ALLERGENS.map((allergen) => {
+                                const memberAllergies = (m.allergies || '').split(',').map(a => a.trim()).filter(Boolean)
+                                const checked = memberAllergies.includes(allergen)
+                                return (
+                                  <label key={allergen} style={{ fontWeight: 400 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={e => {
+                                        const updated = e.target.checked
+                                          ? [...memberAllergies, allergen]
+                                          : memberAllergies.filter(a => a !== allergen)
+                                        if (typeof m.onUpdateAllergies === 'function') {
+                                          m.onUpdateAllergies(updated.join(','))
+                                        }
+                                      }}
+                                    /> {allergen}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Other allergies (comma separated)"
+                              defaultValue={(m.allergies || '').split(',').filter(a => !COMMON_ALLERGENS.includes(a.trim())).join(', ')}
+                              onBlur={e => {
+                                const custom = e.target.value.split(',').map(a => a.trim()).filter(Boolean)
+                                const memberAllergies = (m.allergies || '').split(',').map(a => a.trim()).filter(Boolean)
+                                const nonCommon = memberAllergies.filter(a => !COMMON_ALLERGENS.includes(a))
+                                const combined = [...new Set([...memberAllergies.filter(a => COMMON_ALLERGENS.includes(a)), ...custom])]
+                                if (typeof m.onUpdateAllergies === 'function') {
+                                  m.onUpdateAllergies(combined.join(','))
+                                }
+                              }}
+                              style={{ marginTop: 4, width: '100%' }}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -226,6 +270,8 @@ export default function HouseholdManagement({
                     <p className="empty-message">No members listed for this household.</p>
                   )}
                   <div className="invite-row">
+                    // NOTE: You must implement the logic to fetch, update, and persist the allergies field for each member via GraphQL/Hasura mutations.
+                    // The UI above expects each member object to have an 'allergies' field and an 'onUpdateAllergies' callback for saving changes.
                     <button
                       className="btn btn-secondary"
                       onClick={async () => {

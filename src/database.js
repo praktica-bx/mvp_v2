@@ -344,6 +344,11 @@ const expiryToISO = (expiryDate) => {
     const [mm, yyyy] = expiryDate.split('.')
     return `${yyyy}-${mm}-01T00:00:00.000Z`
   }
+  // DD.MM.YYYY (legacy, convert to MM.YYYY)
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(expiryDate)) {
+    const [dd, mm, yyyy] = expiryDate.split('.')
+    return `${yyyy}-${mm}-01T00:00:00.000Z`
+  }
   // YYYY-MM (from <input type="month">)
   if (/^\d{4}-\d{2}$/.test(expiryDate)) {
     return `${expiryDate}-01T00:00:00.000Z`
@@ -1525,7 +1530,7 @@ const DEFAULT_FIELD_PREFERENCES = {
   productName: { visible: true, mandatory: true, label: 'Product Name' },
   quantity: { visible: true, mandatory: true, label: 'Quantity' },
   unit: { visible: true, mandatory: false, label: 'Unit' },
-  expiryDate: { visible: true, mandatory: true, label: 'Expiry Date' },
+  expiryDate: { visible: true, mandatory: true, label: 'Expiry Date (MM.YYYY)' },
   category: { visible: true, mandatory: true, label: 'Category' },
   allergens: { visible: true, mandatory: false, label: 'Allergens' },
   storageLocation: { visible: true, mandatory: false, label: 'Storage Location' },
