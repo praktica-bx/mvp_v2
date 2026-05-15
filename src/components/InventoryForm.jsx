@@ -1,3 +1,21 @@
+// Helper to normalize expiry date to MM.YYYY
+function normalizeExpiryDate(raw) {
+  if (!raw) return '';
+  if (/^\d{2}\.\d{4}$/.test(raw)) return raw;
+  // If DD.MM.YYYY, split and use MM.YYYY
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
+    const [dd, mm, yyyy] = raw.split('.')
+    return `${mm}.${yyyy}`;
+  }
+  // Try ISO or other formats
+  const d = new Date(raw);
+  if (!isNaN(d)) {
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${mm}.${yyyy}`;
+  }
+  return raw;
+}
 import { useState, useEffect } from 'react'
 import AllergenCheckboxes from './AllergenCheckboxes'
 import OpenFoodFactsSearchModal from './OpenFoodFactsSearchModal'
@@ -97,25 +115,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         const item = await getInventoryItem(itemId)
         if (item) {
           // Only use MM.YYYY for expiryDate
-          let expiryRaw = item.expiryDate || item.expiry_date || '';
-          let expiryDate = '';
-          if (/^\d{2}\.\d{4}$/.test(expiryRaw)) {
-            expiryDate = expiryRaw;
-          } else if (expiryRaw) {
-            // Try to parse DD.MM.YYYY or ISO or other formats to MM.YYYY
-            // If DD.MM.YYYY, split and use MM.YYYY
-            if (/^\d{2}\.\d{2}\.\d{4}$/.test(expiryRaw)) {
-              const [dd, mm, yyyy] = expiryRaw.split('.')
-              expiryDate = `${mm}.${yyyy}`
-            } else {
-              const d = new Date(expiryRaw);
-              if (!isNaN(d)) {
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const yyyy = d.getFullYear();
-                expiryDate = `${mm}.${yyyy}`;
-              }
-            }
-          }
+            const expiryDate = normalizeExpiryDate(item.expiryDate || item.expiry_date || '')
           setFormData({
             ...EMPTY_FORM,
             ...item,
@@ -265,19 +265,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       // Save ALL fields from formData, converting arrays to comma-separated strings for DB
       const itemToSave = { ...formData }
       // Ensure expiryDate is MM.YYYY for storage
-      if (itemToSave.expiryDate && !/^\d{2}\.\d{4}$/.test(itemToSave.expiryDate)) {
-        const d = new Date(itemToSave.expiryDate);
-        if (!isNaN(d)) {
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          const yyyy = d.getFullYear();
-          itemToSave.expiryDate = `${mm}.${yyyy}`;
-        }
-      }
-        // If DD.MM.YYYY, convert to MM.YYYY
-        if (itemToSave.expiryDate && /^\d{2}\.\d{2}\.\d{4}$/.test(itemToSave.expiryDate)) {
-          const [dd, mm, yyyy] = itemToSave.expiryDate.split('.')
-          itemToSave.expiryDate = `${mm}.${yyyy}`
-        }
+        itemToSave.expiryDate = normalizeExpiryDate(itemToSave.expiryDate);
       // Convert array fields to comma-separated strings for DB storage
       if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
       if (Array.isArray(itemToSave.dietaryRestrictions)) itemToSave.dietaryRestrictions = itemToSave.dietaryRestrictions.join(',')

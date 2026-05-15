@@ -10,26 +10,52 @@ const SORT_OPTIONS = [
   { value: 'added', label: 'Date Added' },
 ]
 
+
+// Helper to parse MM.YYYY or fallback to Date
+function parseExpiryDate(expiryDate) {
+  if (!expiryDate) return null;
+  // MM.YYYY format
+  const mmYYYY = /^([0-1][0-9])\.(\d{4})$/;
+  const match = mmYYYY.exec(expiryDate);
+  if (match) {
+    const month = parseInt(match[1], 10);
+    const year = parseInt(match[2], 10);
+    // Use last day of the month for expiry
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, lastDay);
+  }
+  // Try ISO or other formats
+  const d = new Date(expiryDate);
+  if (!isNaN(d)) return d;
+  return null;
+}
+
 function getExpiryStatus(expiryDate) {
-  if (!expiryDate) return 'none'
-  const now = new Date()
-  const expiry = new Date(expiryDate)
-  const daysLeft = Math.floor((expiry - now) / (1000 * 60 * 60 * 24))
-  if (daysLeft < 0) return 'expired'
-  if (daysLeft <= 30) return 'soon'
-  return 'ok'
+  if (!expiryDate) return 'none';
+  const now = new Date();
+  const expiry = parseExpiryDate(expiryDate);
+  if (!expiry) return 'none';
+  const daysLeft = Math.floor((expiry - now) / (1000 * 60 * 60 * 24));
+  if (daysLeft < 0) return 'expired';
+  if (daysLeft <= 30) return 'soon';
+  return 'ok';
 }
 
 function formatExpiry(expiryDate) {
-  if (!expiryDate) return '—'
-  const expiry = new Date(expiryDate)
-  const now = new Date()
-  const daysLeft = Math.floor((expiry - now) / (1000 * 60 * 60 * 24))
-  const formatted = expiry.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  if (daysLeft < 0) return `${formatted} (expired)`
-  if (daysLeft === 0) return `${formatted} (today)`
-  if (daysLeft <= 30) return `${formatted} (${daysLeft}d)`
-  return formatted
+  if (!expiryDate) return '—';
+  // If already MM.YYYY, show as is
+  if (/^\d{2}\.\d{4}$/.test(expiryDate)) {
+    return expiryDate;
+  }
+  const expiry = parseExpiryDate(expiryDate);
+  if (!expiry) return expiryDate;
+  const now = new Date();
+  const daysLeft = Math.floor((expiry - now) / (1000 * 60 * 60 * 24));
+  const formatted = expiry.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  if (daysLeft < 0) return `${formatted} (expired)`;
+  if (daysLeft === 0) return `${formatted} (today)`;
+  if (daysLeft <= 30) return `${formatted} (${daysLeft}d)`;
+  return formatted;
 }
 
 export default function InventoryList({ householdId, refreshKey, onEdit, onDeleted }) {
@@ -84,26 +110,19 @@ export default function InventoryList({ householdId, refreshKey, onEdit, onDelet
     })
     .sort((a, b) => {
       if (sortBy === 'expiry') {
-        if (!a.expiryDate) return 1
-        if (!b.expiryDate) return -1
-        return new Date(a.expiryDate) - new Date(b.expiryDate)
-          // If already MM.YYYY, return as is
-          if (/^\d{2}\.\d{4}$/.test(expiryDate)) {
-            return expiryDate
-          }
-          // Try to parse ISO or other formats
-          const d = new Date(expiryDate)
-          if (!isNaN(d)) {
-            const mm = String(d.getMonth() + 1).padStart(2, '0')
-            const yyyy = d.getFullYear()
-            return `${mm}.${yyyy}`
-          }
-          return expiryDate
+        if (!a.expiryDate) return 1;
+        if (!b.expiryDate) return -1;
+        const aDate = parseExpiryDate(a.expiryDate);
+        const bDate = parseExpiryDate(b.expiryDate);
+        if (!aDate && !bDate) return 0;
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return aDate - bDate;
       }
       if (sortBy === 'added') {
-        return new Date(b.purchaseDate || 0) - new Date(a.purchaseDate || 0)
+        return new Date(b.purchaseDate || 0) - new Date(a.purchaseDate || 0);
       }
-      return 0
+      return 0;
     })
 
   if (loading) {
