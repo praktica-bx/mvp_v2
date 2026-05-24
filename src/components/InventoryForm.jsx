@@ -99,6 +99,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   const { openConflictModal } = useConflictModal()
 
   const [formData, setFormData] = useState(EMPTY_FORM)
+  const [mustHaveValues, setMustHaveValues] = useState({})
   const [preferences, setPreferences] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
