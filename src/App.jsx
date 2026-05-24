@@ -92,15 +92,19 @@ export default function App() {
     if (isAuthenticated && currentHousehold && nhostConfigured) {
       let intervalId = null
 
+
+      // Bidirectional sync: always pull from cloud before pushing local changes
       const runSync = async () => {
         try {
-          await syncToCloud()
-        } catch (e) {
-          console.warn('Background push (syncToCloud) failed:', e)
-        }
-
-        try {
+          // 1. Pull remote changes first
           const cloudResult = await fetchFromCloud(currentHousehold.id)
+          // Optionally, notify if any local items were overwritten (placeholder)
+          if (cloudResult?.applied > 0) {
+            // TODO: Show notification if local items were overwritten by cloud
+            setListRefreshKey((k) => k + 1)
+          }
+          // 2. Push local changes after merging remote
+          await syncToCloud()
           // Re-load stats inline to avoid stale closure / re-render loop
           const inventoryStats = await getInventoryStats(currentHousehold.id)
           const inventoryByCategory = await getInventoryByDsbCategory(currentHousehold.id)
@@ -115,12 +119,8 @@ export default function App() {
           setStats({ ...inventoryStats, completeness, householdMembers, contingencyPersons, totalPersons, inventoryByCategory })
           const pending = await getPendingSyncs()
           setPendingSyncCount(pending.length)
-          // Refresh the inventory list if new items were pulled from the cloud
-          if (cloudResult?.applied > 0) {
-            setListRefreshKey((k) => k + 1)
-          }
         } catch (err) {
-          console.warn('Background fetchFromCloud failed:', err)
+          console.warn('Bidirectional sync failed:', err)
         }
       }
 
