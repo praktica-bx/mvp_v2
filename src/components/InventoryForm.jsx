@@ -406,7 +406,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             {formData.category && value && (
               <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="checkbox" checked={isMustHave} readOnly style={{ pointerEvents: 'none' }} />
-                <span style={{ fontSize: '0.95em', color: isMustHave ? '#1a7f37' : '#888' }}>
+                <span style={{ fontSize: '0.95em', color: isMustHave ? 'var(--color-success, #1a7f37)' : 'var(--color-muted, #888)' }}>
                   This is a must-have item
                 </span>
               </div>
@@ -424,7 +424,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             </select>
             {/* Must-have info text */}
             {mustHaveNames && (
-              <div style={{ fontSize: '0.92em', color: '#888', marginTop: 4 }}>
+              <div style={{ fontSize: '0.92em', color: 'var(--color-muted, #888)', marginTop: 4 }}>
                 Must-have items for this category: {mustHaveNames}
               </div>
             )}
