@@ -287,6 +287,7 @@ export default function App() {
               householdId={currentHousehold?.id}
               householdName={currentHousehold?.name}
               isOnline={isOnline}
+              totalPersons={stats.totalPersons || 1}
             />
           )}
 

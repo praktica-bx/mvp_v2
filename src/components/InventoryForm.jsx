@@ -39,49 +39,6 @@ import {
   fetchFromCloud,
 } from '../database'
 
-const EMPTY_FORM = {
-  barcode: '',
-  productName: '',
-  quantity: 1,
-  unit: 'pcs',
-  expiryDate: '',
-  category: 'water',
-  allergens: [],
-  storageLocation: '',
-  cost: '',
-  purchaseDate: new Date().toISOString().split('T')[0],
-  preferredConsumptionDate: '',
-  supplier: '',
-  storageNotes: '',
-  itemStatus: 'unopened',
-  lotNumber: '',
-  nutritionInfo: '',
-  dietaryRestrictions: [],
-  priorityLevel: 'important',
-  packaging: '',
-  ingredients: '',
-  packageSize: '',
-  countryOfOrigin: '',
-  storageInstructions: '',
-  manufacturer: '',
-  prescriptionRequired: false,
-  dosage: '',
-  batteryChemistry: '',
-  manufactureDate: '',
-  allowGracePeriod: false,
-  gracePeriodMonths: 0,
-  brand: '',
-  batteryCapacity: '',
-  lumen: '',
-  caloriesPerServing: '',
-  servingsPerPackage: '',
-  powerRating: '',
-  medicationForm: '',
-  documentsType: '',
-  specialNeedsDetails: '',
-  storageTemperature: '',
-  containerType: '',
-}
 
 // Helper to get must-have items for a category
 function getMustHaveItems(category, totalPersons = 1) {
@@ -138,7 +95,7 @@ const EMPTY_FORM = {
   containerType: '',
 }
 
-export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName }) {
+export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenScanner, scannedBarcode, isOnline = true, householdId, householdName, totalPersons = 1 }) {
   const { openConflictModal } = useConflictModal()
 
   const [formData, setFormData] = useState(EMPTY_FORM)
