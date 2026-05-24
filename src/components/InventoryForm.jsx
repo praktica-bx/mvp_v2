@@ -1,10 +1,13 @@
-  // Handles changes to must-have item fields
-  const handleMustHaveChange = (name, value) => {
-    setMustHaveValues(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
+  // Remove must-have item fields logic (no longer needed)
+
+  // Helper: check if current item is a must-have for the selected category
+  const mustHaveList = getMustHaveItems(formData.category, totalPersons)
+  const isMustHave = mustHaveList.some(item =>
+    item.name.trim().toLowerCase() === (formData.productName || '').trim().toLowerCase()
+  )
+
+  // Helper: comma-separated must-have names for info text
+  const mustHaveNames = mustHaveList.map(item => item.name).join(', ')
 // Helper to normalize expiry date to MM.YYYY
 function normalizeExpiryDate(raw) {
   if (!raw) return '';
@@ -399,6 +402,15 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               placeholder="Product name"
               required={config.mandatory}
             />
+            {/* Must-have item checkbox (read-only) */}
+            {formData.category && value && (
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={isMustHave} readOnly style={{ pointerEvents: 'none' }} />
+                <span style={{ fontSize: '0.95em', color: isMustHave ? '#1a7f37' : '#888' }}>
+                  This is a must-have item
+                </span>
+              </div>
+            )}
           </div>
         )
       case 'category':
@@ -410,6 +422,12 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
               ))}
             </select>
+            {/* Must-have info text */}
+            {mustHaveNames && (
+              <div style={{ fontSize: '0.92em', color: '#888', marginTop: 4 }}>
+                Must-have items for this category: {mustHaveNames}
+              </div>
+            )}
           </div>
         )
       case 'quantity':
@@ -622,7 +640,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         </div>
 
         <form onSubmit={handleSubmit} className="inventory-form">
-          {renderMustHaveFields()}
+          {/* Must-have fields removed: now handled by checklist only */}
           {visibleFields.includes('barcode') && visibleFields.includes('productName') && (
             <>
               {renderField('barcode')}
