@@ -1,14 +1,3 @@
-  // Remove must-have item fields logic (no longer needed)
-
-  // Must-have logic moved inside component so formData is always defined
-  // (Place this after all useState declarations inside InventoryForm)
-  // --- MOVED BLOCK START ---
-  const mustHaveList = getMustHaveItems(formData.category, totalPersons)
-  const isMustHave = mustHaveList.some(item =>
-    item.name.trim().toLowerCase() === (formData.productName || '').trim().toLowerCase()
-  )
-  const mustHaveNames = mustHaveList.map(item => item.name).join(', ')
-  // --- MOVED BLOCK END ---
 // Helper to normalize expiry date to MM.YYYY
 function normalizeExpiryDate(raw) {
   if (!raw) return '';
