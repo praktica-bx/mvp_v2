@@ -1,3 +1,10 @@
+  // Handles changes to must-have item fields
+  const handleMustHaveChange = (name, value) => {
+    setMustHaveValues(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
 // Helper to normalize expiry date to MM.YYYY
 function normalizeExpiryDate(raw) {
   if (!raw) return '';
