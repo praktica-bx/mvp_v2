@@ -374,14 +374,9 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
             <select id={fieldName} name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
-              <option value="water">Water</option>
-              <option value="food">Food</option>
-              <option value="first-aid">First Aid</option>
-              <option value="tools">Tools</option>
-              <option value="light">Light</option>
-              <option value="documents">Documents</option>
-              <option value="special-needs">Special Needs</option>
-              <option value="other">Other</option>
+              {require('../constants/categories').SUPPLY_CATEGORIES.map(cat => (
+                <option key={cat.value} value={cat.value}>{cat.label}</option>
+              ))}
             </select>
           </div>
         )
