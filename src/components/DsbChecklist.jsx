@@ -19,7 +19,7 @@ const SCALED_ITEMS = ['water', 'food', 'medications', 'hygiene', 'warmth']
 export default function DsbChecklist({ inventoryByCategory = {}, totalPersons = 1 }) {
   const dsbData = getDsbBaseline()
 
-  // Build checklist items based on SUPPLY_CATEGORIES and DSB mapping
+  // Build checklist items based on SUPPLY_CATEGORIES and DSB mapping, including must-have validation
   const detailedStats = SUPPLY_CATEGORIES.filter(cat => cat.dsbCategory && dsbData[cat.dsbCategory])
     .map(cat => {
       const dsbKey = cat.dsbCategory
@@ -29,6 +29,34 @@ export default function DsbChecklist({ inventoryByCategory = {}, totalPersons = 
       const target = isScaled ? dsb.target * totalPersons : dsb.target
       const current = inventoryByCategory[cat.value] || 0
       const percentage = Math.min(100, Math.round((current / target) * 100))
+
+      // Must-have logic
+      const mustHaves = (dsb.mustHave || []).map(item => ({
+        ...item,
+        quantity: item.perPerson ? item.quantity * totalPersons : item.quantity
+      }))
+      // Assume inventoryByCategory[cat.value] is an array of items for this category
+      const items = Array.isArray(inventoryByCategory[cat.value]) ? inventoryByCategory[cat.value] : []
+      const missingMustHaves = mustHaves.filter(mh => {
+        // Find all items in inventory that match this must-have name
+        const found = items.filter(inv => inv.mustHave && inv.mustHave[mh.name] && Number(inv.mustHave[mh.name]) >= mh.quantity)
+        // If none found, it's missing
+        return !found.length && !mh.optional
+      })
+      // Expiry check: if any must-have item is expired, treat as missing
+      const expiredMustHaves = mustHaves.filter(mh => {
+        const found = items.find(inv => inv.mustHave && inv.mustHave[mh.name] && Number(inv.mustHave[mh.name]) >= mh.quantity)
+        if (!found) return false
+        // If item has expiryDate and it's in the past, mark as expired
+        if (found.expiryDate) {
+          const now = new Date()
+          const [mm, yyyy] = found.expiryDate.split('.')
+          const expiry = new Date(Number(yyyy), Number(mm) - 1, 1)
+          if (expiry < now) return true
+        }
+        return false
+      })
+      const isComplete = current >= target && missingMustHaves.length === 0 && expiredMustHaves.length === 0
       return {
         category: cat.value,
         dsbCategory: dsbKey,
@@ -38,8 +66,10 @@ export default function DsbChecklist({ inventoryByCategory = {}, totalPersons = 
         unit: dsb.unit,
         current,
         percentage,
-        isComplete: current >= target,
+        isComplete,
         remaining: Math.max(0, target - current),
+        missingMustHaves,
+        expiredMustHaves,
       }
     })
 
@@ -86,6 +116,29 @@ export default function DsbChecklist({ inventoryByCategory = {}, totalPersons = 
             {!item.isComplete && item.remaining > 0 && (
               <div className="remaining">
                 Need {item.remaining} more {item.unit}
+              </div>
+            )}
+
+            {/* Show missing must-have items */}
+            {item.missingMustHaves && item.missingMustHaves.length > 0 && (
+              <div className="must-have-warning">
+                <strong>Missing must-have items:</strong>
+                <ul>
+                  {item.missingMustHaves.map(mh => (
+                    <li key={mh.name}>{mh.name} ({mh.quantity} {mh.unit}{mh.perPerson ? ' per person' : ''})</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Show expired must-have items */}
+            {item.expiredMustHaves && item.expiredMustHaves.length > 0 && (
+              <div className="must-have-warning">
+                <strong>Expired must-have items:</strong>
+                <ul>
+                  {item.expiredMustHaves.map(mh => (
+                    <li key={mh.name}>{mh.name} ({mh.quantity} {mh.unit}{mh.perPerson ? ' per person' : ''})</li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

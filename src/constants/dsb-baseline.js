@@ -14,6 +14,9 @@ export const dsbBaseline = {
     daily: 1.5,
     days: 7,
     note: '1.5 liters per person per day',
+    mustHave: [
+      { name: 'Water (drinking)', quantity: 10.5, unit: 'liters', perPerson: true },
+    ],
   },
   food: {
     name: 'Food',
@@ -23,6 +26,9 @@ export const dsbBaseline = {
     daily: 2000,
     days: 7,
     note: '2000 kcal per person per day (or 21 meals/cans per person)',
+    mustHave: [
+      { name: 'Non-perishable food', quantity: 14000, unit: 'kcal', perPerson: true },
+    ],
   },
   medications: {
     name: 'Medications',
@@ -32,6 +38,9 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 week supply per person',
+    mustHave: [
+      { name: 'Personal medications', quantity: 1, unit: 'week supply', perPerson: true },
+    ],
   },
   firstAid: {
     name: 'First Aid',
@@ -41,6 +50,9 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 kit per household',
+    mustHave: [
+      { name: 'First aid kit', quantity: 1, unit: 'kit', perHousehold: true },
+    ],
   },
   hygiene: {
     name: 'Hygiene',
@@ -50,6 +62,11 @@ export const dsbBaseline = {
     daily: 1,
     days: 7,
     note: '7 rolls toilet paper per person (1 per day), 1 bar soap, 1 pack sanitary products if needed',
+    mustHave: [
+      { name: 'Toilet paper', quantity: 7, unit: 'rolls', perPerson: true },
+      { name: 'Soap', quantity: 1, unit: 'bar', perHousehold: true },
+      { name: 'Sanitary products', quantity: 1, unit: 'pack', perPerson: false, optional: true },
+    ],
   },
   warmth: {
     name: 'Warmth',
@@ -59,6 +76,12 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '2 blankets per person, 1 set warm clothes per person',
+    mustHave: [
+      { name: 'Blanket', quantity: 2, unit: 'blankets', perPerson: true },
+      { name: 'Warm clothing', quantity: 1, unit: 'set', perPerson: true },
+      { name: 'Hat', quantity: 1, unit: 'pcs', perPerson: true },
+      { name: 'Gloves', quantity: 1, unit: 'pair', perPerson: true },
+    ],
   },
   light: {
     name: 'Light',
@@ -68,6 +91,11 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '2 flashlights, 12 AA batteries, 6 candles, 1 radio per household',
+    mustHave: [
+      { name: 'Flashlight', quantity: 2, unit: 'pcs', perHousehold: true },
+      { name: 'Candle', quantity: 6, unit: 'pcs', perHousehold: true },
+      { name: 'Radio', quantity: 1, unit: 'pcs', perHousehold: true },
+    ],
   },
   batteries: {
     name: 'Batteries',
@@ -77,6 +105,10 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '12 AA, 6 AAA per household',
+    mustHave: [
+      { name: 'AA batteries', quantity: 12, unit: 'pcs', perHousehold: true },
+      { name: 'AAA batteries', quantity: 6, unit: 'pcs', perHousehold: true },
+    ],
   },
   documents: {
     name: 'Important Documents',
@@ -86,6 +118,12 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 set per household',
+    mustHave: [
+      { name: 'ID', quantity: 1, unit: 'set', perHousehold: true },
+      { name: 'Insurance documents', quantity: 1, unit: 'set', perHousehold: true },
+      { name: 'Medical records', quantity: 1, unit: 'set', perHousehold: true },
+      { name: 'Photos', quantity: 1, unit: 'set', perHousehold: true },
+    ],
   },
   tools: {
     name: 'Tools & Cash',
@@ -95,6 +133,12 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 multi-tool, 1 roll duct tape, 1 rope, 1 cash stash per household',
+    mustHave: [
+      { name: 'Multi-tool', quantity: 1, unit: 'pcs', perHousehold: true },
+      { name: 'Duct tape', quantity: 1, unit: 'roll', perHousehold: true },
+      { name: 'Rope', quantity: 1, unit: 'pcs', perHousehold: true },
+      { name: 'Cash', quantity: 1, unit: 'stash', perHousehold: true },
+    ],
   },
   communication: {
     name: 'Communication',
@@ -104,6 +148,10 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 power bank, 1 battery radio per household',
+    mustHave: [
+      { name: 'Power bank', quantity: 1, unit: 'pcs', perHousehold: true },
+      { name: 'Battery radio', quantity: 1, unit: 'pcs', perHousehold: true },
+    ],
   },
   'special-needs': {
     name: 'Special Needs',
@@ -113,6 +161,10 @@ export const dsbBaseline = {
     daily: null,
     days: 7,
     note: '1 week supply per person as needed',
+    mustHave: [
+      { name: 'Baby formula', quantity: 1, unit: 'week supply', perPerson: false, optional: true },
+      { name: 'Medical devices', quantity: 1, unit: 'set', perPerson: false, optional: true },
+    ],
   },
 };
 

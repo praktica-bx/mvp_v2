@@ -27,6 +27,7 @@ import {
   isNhostAuthenticated,
 } from '../nhost'
 import { SUPPLY_CATEGORIES } from '../constants/categories'
+import { getDsbBaseline } from '../constants/dsb-baseline'
 import {
   addInventoryItem,
   getFieldPreferences,
@@ -37,6 +38,61 @@ import {
   getInventoryById,
   fetchFromCloud,
 } from '../database'
+
+const EMPTY_FORM = {
+  barcode: '',
+  productName: '',
+  quantity: 1,
+  unit: 'pcs',
+  expiryDate: '',
+  category: 'water',
+  allergens: [],
+  storageLocation: '',
+  cost: '',
+  purchaseDate: new Date().toISOString().split('T')[0],
+  preferredConsumptionDate: '',
+  supplier: '',
+  storageNotes: '',
+  itemStatus: 'unopened',
+  lotNumber: '',
+  nutritionInfo: '',
+  dietaryRestrictions: [],
+  priorityLevel: 'important',
+  packaging: '',
+  ingredients: '',
+  packageSize: '',
+  countryOfOrigin: '',
+  storageInstructions: '',
+  manufacturer: '',
+  prescriptionRequired: false,
+  dosage: '',
+  batteryChemistry: '',
+  manufactureDate: '',
+  allowGracePeriod: false,
+  gracePeriodMonths: 0,
+  brand: '',
+  batteryCapacity: '',
+  lumen: '',
+  caloriesPerServing: '',
+  servingsPerPackage: '',
+  powerRating: '',
+  medicationForm: '',
+  documentsType: '',
+  specialNeedsDetails: '',
+  storageTemperature: '',
+  containerType: '',
+}
+
+// Helper to get must-have items for a category
+function getMustHaveItems(category, totalPersons = 1) {
+  const dsb = getDsbBaseline()
+  const cat = SUPPLY_CATEGORIES.find(c => c.value === category)
+  if (!cat || !cat.dsbCategory || !dsb[cat.dsbCategory] || !dsb[cat.dsbCategory].mustHave) return []
+  return dsb[cat.dsbCategory].mustHave.map(item => ({
+    ...item,
+    quantity: item.perPerson ? item.quantity * totalPersons : item.quantity
+  }))
+}
 
 const EMPTY_FORM = {
   barcode: '',
@@ -235,6 +291,13 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   }
 
   const validateForm = () => {
+        // Validate must-have items for the selected category
+        const mustHaves = getMustHaveItems(formData.category, totalPersons)
+        for (const item of mustHaves) {
+          if (!item.optional && (!mustHaveValues[item.name] || Number(mustHaveValues[item.name]) < item.quantity)) {
+            throw new Error(`Must have at least ${item.quantity} ${item.unit} of ${item.name}`)
+          }
+        }
     if (!preferences) return true
     for (const [field, config] of Object.entries(preferences)) {
       if (config.mandatory) {
@@ -263,10 +326,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         }
       }
 
+
       // Save ALL fields from formData, converting arrays to comma-separated strings for DB
       const itemToSave = { ...formData }
       // Ensure expiryDate is MM.YYYY for storage
-        itemToSave.expiryDate = normalizeExpiryDate(itemToSave.expiryDate);
+      itemToSave.expiryDate = normalizeExpiryDate(itemToSave.expiryDate);
       // Convert array fields to comma-separated strings for DB storage
       if (Array.isArray(itemToSave.allergens)) itemToSave.allergens = itemToSave.allergens.join(',')
       if (Array.isArray(itemToSave.dietaryRestrictions)) itemToSave.dietaryRestrictions = itemToSave.dietaryRestrictions.join(',')
@@ -274,6 +338,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       itemToSave.allowGracePeriod = !!formData.allowGracePeriod
       itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0
       itemToSave.prescriptionRequired = !!formData.prescriptionRequired
+      // Store must-have item values
+      itemToSave.mustHave = mustHaveValues
 
       // Only stamp addedDate when creating (not editing — preserve original creation date)
       if (!itemId) {
@@ -555,6 +621,31 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
 
   const visibleFields = Object.keys(preferences).filter((key) => preferences[key]?.visible)
 
+  // Render must-have item fields for the selected category
+  const renderMustHaveFields = () => {
+    const mustHaves = getMustHaveItems(formData.category, totalPersons)
+    if (!mustHaves.length) return null
+    return (
+      <div className="must-have-fields">
+        <h4>Must-have items for this category:</h4>
+        {mustHaves.map(item => (
+          <div key={item.name} className="form-group">
+            <label htmlFor={`musthave-${item.name}`}>{item.name} ({item.quantity} {item.unit}{item.perPerson ? ' per person' : ''})</label>
+            <input
+              id={`musthave-${item.name}`}
+              type="number"
+              min="0"
+              name={item.name}
+              value={mustHaveValues[item.name] || ''}
+              onChange={e => handleMustHaveChange(item.name, e.target.value)}
+              required={!item.optional}
+            />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
@@ -566,6 +657,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
         </div>
 
         <form onSubmit={handleSubmit} className="inventory-form">
+          {renderMustHaveFields()}
           {visibleFields.includes('barcode') && visibleFields.includes('productName') && (
             <>
               {renderField('barcode')}
