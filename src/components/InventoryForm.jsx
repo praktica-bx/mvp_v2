@@ -380,6 +380,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           </div>
         )
       case 'productName':
+        // Determine if this product is a must-have for the selected category
+        const isMustHave = !!(formData.category && getMustHaveItems(formData.category, totalPersons).some(item => item.name === value));
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
