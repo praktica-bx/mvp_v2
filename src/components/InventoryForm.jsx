@@ -406,6 +406,10 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           </div>
         )
       case 'category':
+        // List must-have item names for the selected category
+        const mustHaveNames = formData.category
+          ? getMustHaveItems(formData.category, totalPersons).map(item => item.name).join(', ')
+          : '';
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
