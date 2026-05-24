@@ -26,6 +26,7 @@ import {
   isNhostConfigured,
   isNhostAuthenticated,
 } from '../nhost'
+import { SUPPLY_CATEGORIES } from '../constants/categories'
 import {
   addInventoryItem,
   getFieldPreferences,
@@ -374,7 +375,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
             <select id={fieldName} name={fieldName} value={value} onChange={handleChange} required={config.mandatory}>
-              {require('../constants/categories').SUPPLY_CATEGORIES.map(cat => (
+              {SUPPLY_CATEGORIES.map(cat => (
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
               ))}
             </select>
