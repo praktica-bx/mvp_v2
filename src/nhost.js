@@ -1292,7 +1292,20 @@ export const upsertInventoryBatch = async (items = []) => {
     const serverMessage = Array.isArray(bodyErrors)
       ? bodyErrors.map((error) => error.message).filter(Boolean).join('; ')
       : err?.body?.message
-    throw new Error(serverMessage || err.message || 'Unknown Nhost inventory upsert error')
+    let responseDetails = ''
+    if (err?.body) {
+      try {
+        responseDetails = JSON.stringify(err.body).slice(0, 800)
+      } catch {
+        responseDetails = String(err.body).slice(0, 800)
+      }
+    }
+    const message = serverMessage || err.message || 'Unknown Nhost inventory upsert error'
+    const status = err?.status ? ` (HTTP ${err.status})` : ''
+    const details = responseDetails && responseDetails !== JSON.stringify({ message })
+      ? ` Response: ${responseDetails}`
+      : ''
+    throw new Error(`${message}${status}${details}`)
   }
 }
 
