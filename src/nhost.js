@@ -1273,18 +1273,26 @@ export const upsertInventoryBatch = async (items = []) => {
 
     const call = async () => await nhostClient.graphql.request({ query: mutation, variables: { objects: items } })
     const result = await retryRequest(call, { retries: 3, delay: 400 })
-    if (result.errors) {
-      const msg = result.errors[0]?.message || 'Failed to upsert inventory batch'
-      console.error('[SYNC] upsertInventoryBatch graphql errors:', result.errors)
+    const graphQLErrors = result.body?.errors || result.errors
+    if (graphQLErrors?.length) {
+      const msg = graphQLErrors.map((error) => error.message).filter(Boolean).join('; ') || 'Failed to upsert inventory batch'
+      console.error('[SYNC] upsertInventoryBatch graphql errors:', graphQLErrors)
       throw new Error(msg)
     }
 
     const returning = (result.body || result).data?.insert_inventory?.returning || []
+    if (returning.length === 0 && items.length > 0) {
+      throw new Error(`Nhost returned no inventory rows (HTTP ${result.status || 'unknown'}); check Hasura insert/update permissions`)
+    }
     console.log(`[SYNC] upsertInventoryBatch: requested=${items.length} returned=${returning.length}`)
     return returning
   } catch (err) {
     console.error('[SYNC] upsertInventoryBatch error:', err)
-    throw err
+    const bodyErrors = err?.body?.errors
+    const serverMessage = Array.isArray(bodyErrors)
+      ? bodyErrors.map((error) => error.message).filter(Boolean).join('; ')
+      : err?.body?.message
+    throw new Error(serverMessage || err.message || 'Unknown Nhost inventory upsert error')
   }
 }
 
