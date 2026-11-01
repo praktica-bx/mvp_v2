@@ -1235,13 +1235,20 @@ export const syncToCloud = async () => {
     console.log(`[SYNC] syncToCloud: ${pending?.length || 0} pending change(s)`)
     if (!pending || pending.length === 0) return { success: true, synced: 0 }
 
-    // Group inventory changes
+    // Send only the latest queued state for each item; Postgres rejects duplicate
+    // conflict keys within a single INSERT ... ON CONFLICT statement.
+    const latestInventoryChanges = new Map()
+    const orderedInventoryChanges = pending
+      .filter((change) => change.table === 'inventory')
+      .sort((left, right) => Date.parse(left.timestamp || 0) - Date.parse(right.timestamp || 0))
+    for (const change of orderedInventoryChanges) {
+      latestInventoryChanges.set(String(change.recordId), change)
+    }
+
     const inventoryUpserts = []
     const inventoryDeletes = []
 
-    for (const change of pending) {
-      if (change.table !== 'inventory') continue
-
+    for (const change of latestInventoryChanges.values()) {
       if (change.operation === 'delete') {
         inventoryDeletes.push(change.recordId)
       } else if (change.data) {
@@ -1285,8 +1292,7 @@ export const syncToCloud = async () => {
         const returnedIds = (res || []).map((r) => r.id).filter(Boolean)
         console.log(`[SYNC] Upsert returned ${returnedIds.length} id(s):`, returnedIds)
         syncedCount += returnedIds.length
-        const syncedChanges = pending.filter((change) =>
-          change.table === 'inventory' &&
+        const syncedChanges = Array.from(latestInventoryChanges.values()).filter((change) =>
           change.operation !== 'delete' &&
           returnedIds.includes(String(change.recordId))
         )
@@ -1337,8 +1343,7 @@ export const syncToCloud = async () => {
           }
           syncedCount += affected
           try {
-            const deletedChanges = pending.filter((change) =>
-              change.table === 'inventory' &&
+            const deletedChanges = Array.from(latestInventoryChanges.values()).filter((change) =>
               change.operation === 'delete' &&
               inventoryDeletes.includes(String(change.recordId))
             )
