@@ -1284,6 +1284,7 @@ export const syncToCloud = async () => {
 
     let syncedCount = 0
     let failedCount = 0
+    let failureReason = null
 
     // Send upserts (safe: mark only returned ids as synced)
     if (inventoryUpserts.length > 0) {
@@ -1318,10 +1319,12 @@ export const syncToCloud = async () => {
         // If some requested IDs did not return, log for inspection
         if (returnedIds.length < inventoryUpserts.length) {
           failedCount += inventoryUpserts.length - returnedIds.length
+          failureReason = `Only ${returnedIds.length} of ${inventoryUpserts.length} inventory items were accepted by Nhost`
           console.warn(`[SYNC] Partial upsert: requested=${inventoryUpserts.length} returned=${returnedIds.length}`)
         }
       } catch (upErr) {
         failedCount += inventoryUpserts.length
+        failureReason = `Inventory upsert failed: ${upErr.message || 'Unknown Nhost error'}`
         console.error('[SYNC] upsertInventoryBatch failed, leaving changes unsynced:', upErr)
       }
     }
@@ -1358,10 +1361,12 @@ export const syncToCloud = async () => {
           }
         } else {
           failedCount += inventoryDeletes.length
+          failureReason ||= 'Nhost did not confirm the inventory deletions'
           console.warn('[SYNC] deleteInventoryBatch reported 0 affected rows')
         }
       } catch (delErr) {
         failedCount += inventoryDeletes.length
+        failureReason ||= `Inventory delete failed: ${delErr.message || 'Unknown Nhost error'}`
         console.error('[SYNC] deleteInventoryBatch failed, leaving deletes unsynced:', delErr)
       }
     }
@@ -1375,7 +1380,7 @@ export const syncToCloud = async () => {
       }
     }
 
-    return { success: failedCount === 0, synced: syncedCount, failed: failedCount }
+    return { success: failedCount === 0, synced: syncedCount, failed: failedCount, reason: failureReason }
   } catch (err) {
     console.error('syncToCloud failed:', err)
     throw err
