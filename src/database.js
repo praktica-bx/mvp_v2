@@ -1242,7 +1242,8 @@ export const syncToCloud = async () => {
       .filter((change) => change.table === 'inventory')
       .sort((left, right) => Date.parse(left.timestamp || 0) - Date.parse(right.timestamp || 0))
     for (const change of orderedInventoryChanges) {
-      latestInventoryChanges.set(String(change.recordId), change)
+      const itemId = change.data?.id || change.recordId
+      latestInventoryChanges.set(String(itemId).toLowerCase(), change)
     }
 
     const inventoryUpserts = []
@@ -1292,9 +1293,10 @@ export const syncToCloud = async () => {
         const returnedIds = (res || []).map((r) => r.id).filter(Boolean)
         console.log(`[SYNC] Upsert returned ${returnedIds.length} id(s):`, returnedIds)
         syncedCount += returnedIds.length
+        const returnedIdSet = new Set(returnedIds.map((id) => String(id).toLowerCase()))
         const syncedChanges = Array.from(latestInventoryChanges.values()).filter((change) =>
           change.operation !== 'delete' &&
-          returnedIds.includes(String(change.recordId))
+          returnedIdSet.has(String(change.data?.id || change.recordId).toLowerCase())
         )
         try {
           await insertCloudSyncLogs(syncedChanges.map((change) => ({
@@ -1306,8 +1308,12 @@ export const syncToCloud = async () => {
         } catch (logError) {
           console.warn('[SYNC] Inventory synced, but cloud sync log write failed:', logError.message)
         }
-        // Mark local logs as synced only for returned ids
-        for (const id of returnedIds) {
+        // Clear all queued log rows that refer to the rows accepted by Nhost.
+        const syncedRecordIds = new Set(pending
+          .filter((change) => change.table === 'inventory' &&
+            returnedIdSet.has(String(change.data?.id || change.recordId).toLowerCase()))
+          .map((change) => change.recordId))
+        for (const id of syncedRecordIds) {
           try {
             await markSynced('inventory', id)
           } catch (e) {
