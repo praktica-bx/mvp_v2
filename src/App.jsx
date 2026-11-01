@@ -323,7 +323,14 @@ export default function App() {
           )}
 
           {showSettings && (
-            <Settings onClose={() => setShowSettings(false)} />
+            <Settings
+              onClose={() => setShowSettings(false)}
+              householdId={currentHousehold?.id}
+              onCloudPull={() => {
+                setListRefreshKey((key) => key + 1)
+                loadStats()
+              }}
+            />
           )}
 
                 {showHouseholdManagement && (

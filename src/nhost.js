@@ -82,6 +82,7 @@ export const deleteStorageLocation = async (id) => {
  * @param {string|null} householdId - Household ID (optional)
  */
 export const upsertThemeSetting = async (theme, householdId = null) => {
+  if (!householdId) return null;
   const settings = await mergeUserSettings(householdId, { theme });
   return settings?.theme || null;
 };
@@ -92,6 +93,7 @@ export const upsertThemeSetting = async (theme, householdId = null) => {
  */
 export const fetchThemeSetting = async (householdId = null) => {
   await ensureNhostReady();
+  if (!householdId) return null;
   if (useLocalAuth || !nhostClient) return null;
   const user = getNhostUser();
   if (!user) throw new Error('Not authenticated');
@@ -1411,11 +1413,18 @@ export const getInventoryChangesSince = async (sinceISO, householdId) => {
 
     const call = async () => await nhostClient.graphql.request({ query, variables: { since: sinceISO, householdId } })
     const result = await retryRequest(call, { retries: 2, delay: 300 })
-    if (result.errors) {
-      console.error('[SYNC] getInventoryChangesSince graphql errors:', result.errors)
-      throw new Error(result.errors[0]?.message || 'Failed to fetch inventory changes')
+    const response = result.body || result
+    const graphQLErrors = response.errors || result.errors
+    if (graphQLErrors?.length) {
+      const message = graphQLErrors.map((error) => error.message).filter(Boolean).join('; ')
+      console.error('[SYNC] getInventoryChangesSince graphql errors:', graphQLErrors)
+      throw new Error(message || 'Failed to fetch inventory changes')
     }
-    return (result.body || result).data?.inventory || []
+    const inventory = response.data?.inventory
+    if (!Array.isArray(inventory)) {
+      throw new Error(`Nhost returned no inventory result (HTTP ${result.status || 'unknown'})`)
+    }
+    return inventory
   } catch (err) {
     console.error('[SYNC] getInventoryChangesSince error:', err)
     throw err

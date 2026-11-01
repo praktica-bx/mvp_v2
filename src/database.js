@@ -2063,7 +2063,7 @@ export const syncToNhost = async (nhostClient) => {
  * Fetch changes from cloud and apply to local DB for a household
  * - Uses server `updated_at` as authoritative timestamp
  */
-export const fetchFromCloud = async (householdId) => {
+export const fetchFromCloud = async (householdId, { fullSync = false } = {}) => {
   try {
     if (!householdId) throw new Error('householdId required')
     if (!isNhostConfigured() || !isNhostAuthenticated()) {
@@ -2072,7 +2072,9 @@ export const fetchFromCloud = async (householdId) => {
 
     // Last sync per-household
     const lastSyncKey = `lastSync:${householdId}`
-    const lastSync = (await getSetting(lastSyncKey)) || new Date(0).toISOString()
+    const lastSync = fullSync
+      ? new Date(0).toISOString()
+      : (await getSetting(lastSyncKey)) || new Date(0).toISOString()
 
     const changes = await getInventoryChangesSince(lastSync, householdId)
     if (!changes || changes.length === 0) {

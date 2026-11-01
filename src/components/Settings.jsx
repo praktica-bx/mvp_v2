@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { ThemeSwitcherFull } from './ThemeSwitcher'
 import ColorSwatch from './ColorSwatch'
 import './Settings.css'
-import { exportLocalBackup, getPendingChanges, syncToCloud } from '../database'
+import { exportLocalBackup, fetchFromCloud, getPendingChanges, syncToCloud } from '../database'
 
-export default function Settings({ onClose }) {
+export default function Settings({ onClose, householdId, onCloudPull }) {
   const [activeTab, setActiveTab] = useState('display')
   const [language, setLanguage] = useState(localStorage.getItem('app-language') || 'EN')
   const [notifications, setNotifications] = useState(
@@ -162,16 +162,18 @@ export default function Settings({ onClose }) {
                       setIsSyncing(true)
                       setSyncStatus('Syncing…')
                       try {
+                        const pull = await fetchFromCloud(householdId, { fullSync: true })
+                        if (!pull.success) {
+                          setSyncStatus(`Cloud download failed: ${pull.reason || 'Unknown error'}`)
+                          return
+                        }
+                        if (pull.applied > 0) onCloudPull?.()
                         const res = await syncToCloud()
                         const pending = await getPendingChanges()
                         if (!res.success) {
-                          setSyncStatus(`Sync did not complete: ${res.reason || res.message || `${res.failed || pending.length} change(s) failed`}`)
-                        } else if (res.synced === 0 && pending.length > 0) {
-                          setSyncStatus(`No changes synced; ${pending.length} change(s) remain pending.`)
-                        } else if (res.synced === 0) {
-                          setSyncStatus('No pending changes to sync.')
+                          setSyncStatus(`Downloaded ${pull.applied || 0}. Upload failed: ${res.reason || res.message || `${res.failed || pending.length} change(s) failed`}`)
                         } else {
-                          setSyncStatus(`Synced ${res.synced} change(s); ${pending.length} remain pending.`)
+                          setSyncStatus(`Downloaded ${pull.applied || 0}; uploaded ${res.synced || 0}; ${pending.length} pending.`)
                         }
                       } catch (err) {
                         setSyncStatus(`Sync failed: ${err.message}`)

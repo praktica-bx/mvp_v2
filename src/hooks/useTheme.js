@@ -7,6 +7,7 @@ const THEME_STORAGE_KEY = 'emergency-supply-theme';
 
 
 export const useTheme = () => {
+  const householdId = typeof window !== 'undefined' ? localStorage.getItem('currentHouseholdId') : null
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
@@ -45,22 +46,22 @@ export const useTheme = () => {
     localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
 
     // Save to cloud if online and authenticated
-    if (isNhostConfigured() && isNhostAuthenticated()) {
-      upsertThemeSetting(currentTheme).catch((e) => {
+    if (householdId && isNhostConfigured() && isNhostAuthenticated()) {
+      upsertThemeSetting(currentTheme, householdId).catch((e) => {
         // Non-fatal: just log
         console.warn('Cloud upsertThemeSetting failed:', e.message || e);
       });
     }
-  }, [currentTheme]);
+  }, [currentTheme, householdId]);
 
   // On mount, try to load theme from cloud if online and authenticated
   useEffect(() => {
     let cancelled = false;
     async function loadCloudTheme() {
-      if (isNhostConfigured() && isNhostAuthenticated()) {
+      if (householdId && isNhostConfigured() && isNhostAuthenticated()) {
         setLoadingTheme(true);
         try {
-          const cloudTheme = await fetchThemeSetting();
+          const cloudTheme = await fetchThemeSetting(householdId);
           if (cloudTheme && getThemeNames().includes(cloudTheme)) {
             if (!cancelled) setCurrentTheme(cloudTheme);
           }
@@ -73,7 +74,7 @@ export const useTheme = () => {
     }
     loadCloudTheme();
     return () => { cancelled = true; };
-  }, []);
+  }, [householdId]);
 
 
   const switchTheme = (themeName) => {
