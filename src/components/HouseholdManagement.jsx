@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 const COMMON_ALLERGENS = [
   'milk', 'eggs', 'fish', 'shellfish', 'tree nuts', 'peanuts', 'wheat', 'soy', 'sesame', 'mustard', 'celery', 'sulphites', 'lupin', 'molluscs'
 ]
 import './HouseholdManagement.css'
 import StorageLocations from './StorageLocations'
-import { getHouseholdInviteCode } from '../nhost'
+import { fetchHouseholdSettings, getHouseholdInviteCode, upsertHouseholdSettings } from '../nhost'
 
 export default function HouseholdManagement({
   currentHousehold,
@@ -38,6 +38,31 @@ export default function HouseholdManagement({
   const [inviteLoading, setInviteLoading] = useState(false)
   const [showStorageLocations, setShowStorageLocations] = useState(false)
   const tabsClass = `management-tabs ${households.length > 1 ? 'many' : ''} ${currentHousehold?.name && currentHousehold.name.length > 20 ? 'long-name' : ''}`
+
+  useEffect(() => {
+    if (!currentHousehold?.id) return undefined
+    let cancelled = false
+
+    fetchHouseholdSettings(currentHousehold.id)
+      .then((settings) => {
+        if (cancelled) return
+        const membersKey = `household:${currentHousehold.id}:members`
+        const contingencyKey = `household:${currentHousehold.id}:contingency`
+        const savedMembers = Number(settings.householdMembers)
+        const savedContingency = Number(settings.contingencyPersons)
+        setHouseholdMembers(Number.isFinite(savedMembers) && savedMembers > 0
+          ? savedMembers
+          : parseInt(localStorage.getItem(membersKey) || localStorage.getItem('household-members') || '1', 10))
+        setContingencyPersons(Number.isFinite(savedContingency) && savedContingency >= 0
+          ? savedContingency
+          : parseInt(localStorage.getItem(contingencyKey) || localStorage.getItem('contingency-persons') || '0', 10))
+      })
+      .catch((settingsError) => {
+        console.error('Failed to load household settings:', settingsError)
+      })
+
+    return () => { cancelled = true }
+  }, [currentHousehold?.id])
 
   const handleRenameHousehold = async (e) => {
     e.preventDefault()
@@ -316,14 +341,20 @@ export default function HouseholdManagement({
                 <div className="setting-actions">
                   <button
                     className="btn btn-primary"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
+                        setError('')
+                        await upsertHouseholdSettings(currentHousehold.id, {
+                          householdMembers,
+                          contingencyPersons,
+                        })
                         localStorage.setItem(`household:${currentHousehold.id}:members`, householdMembers.toString())
                         localStorage.setItem(`household:${currentHousehold.id}:contingency`, contingencyPersons.toString())
                         if (typeof onSettingsSaved === 'function') onSettingsSaved()
                         alert('Household settings saved')
                       } catch (e) {
                         console.error('Error saving household settings', e)
+                        setError(e.message || 'Failed to save household settings to the cloud')
                       }
                     }}
                     style={{ marginBottom: '10px' }}

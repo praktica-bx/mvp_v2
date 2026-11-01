@@ -65,6 +65,24 @@ In Nhost Console → Hasura → Data:
 - INSERT: `user_id` = current user
 - UPDATE: `user_id` = current user
 
+**For `user_settings` table:**
+- SELECT, INSERT, UPDATE: `user_id` = current user
+
+**For `households` table:**
+- SELECT: allow the household owner and its members
+- INSERT: `owner_id` = current user
+- UPDATE: `owner_id` = current user
+
+**For `household_members` table:**
+- SELECT: allow the current user to read their membership rows
+- INSERT: `user_id` = current user
+- DELETE: allow the household owner to remove members
+
+**For `storage_locations` table:**
+- SELECT, INSERT, UPDATE, DELETE: `user_id` = current user
+
+The app's `sync_log` store in IndexedDB is the local pending queue. Rows are written to the Nhost `sync_log` table only after their inventory changes sync successfully.
+
 ### 5. Enable Authentication
 
 In Nhost Console → Settings → Authentication:

@@ -104,6 +104,17 @@
   align-items: center;
 }
 
+.add-location-form .location-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.add-location-form .btn {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}
+
 .location-input {
   flex: 1 1 0%;
   min-width: 0;
@@ -277,7 +288,7 @@
   }
 
   .add-location-form {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .location-item {

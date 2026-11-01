@@ -19,20 +19,24 @@ export default function LoginScreen({ onAuthSuccess }) {
 
     try {
       if (mode === 'login') {
-        const { session, error: authError } = await signInWithNhost(usernameOrEmail, password)
+        const { session, mfa, error: authError } = await signInWithNhost(usernameOrEmail, password)
         if (authError) {
           setError(authError.message || 'Failed to sign in. Check your credentials.')
           return
         }
-        if (session) {
-          setSuccess('Login successful! Redirecting...')
-          setTimeout(() => {
-            if (!onAuthSuccess(session)) {
-              setSuccess('')
-              setError('Sign-in succeeded, but the account session could not be loaded. Please try again.')
-            }
-          }, 500)
+        if (mfa) {
+          setError('This account requires multi-factor authentication, which is not supported in this app yet.')
+          return
         }
+        if (!session) {
+          setError('Sign-in did not return an active session. Check your account verification and try again.')
+          return
+        }
+        if (!onAuthSuccess(session)) {
+          setError('Sign-in succeeded, but the account session could not be loaded. Please try again.')
+          return
+        }
+        setSuccess('Login successful! Redirecting...')
       } else {
         // Sign up mode
         if (password !== confirmPassword) {
@@ -51,15 +55,15 @@ export default function LoginScreen({ onAuthSuccess }) {
           setError(authError.message || 'Failed to create account')
           return
         }
-        if (session) {
-          setSuccess('Account created! You are now logged in.')
-          setTimeout(() => {
-            if (!onAuthSuccess(session)) {
-              setSuccess('')
-              setError('Account created, but the account session could not be loaded. Please try signing in again.')
-            }
-          }, 500)
+        if (!session) {
+          setError('Account created, but no active session was returned. Check your email and sign in.')
+          return
         }
+        if (!onAuthSuccess(session)) {
+          setError('Account created, but the account session could not be loaded. Please sign in again.')
+          return
+        }
+        setSuccess('Account created! You are now logged in.')
       }
     } catch (err) {
       setError(err.message || 'An error occurred')

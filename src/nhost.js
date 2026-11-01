@@ -82,30 +82,8 @@ export const deleteStorageLocation = async (id) => {
  * @param {string|null} householdId - Household ID (optional)
  */
 export const upsertThemeSetting = async (theme, householdId = null) => {
-  await ensureNhostReady();
-  if (useLocalAuth || !nhostClient) return null;
-  const user = getNhostUser();
-  if (!user) throw new Error('Not authenticated');
-  const mutation = `
-    mutation UpsertUserSettings($userId: uuid!, $householdId: uuid, $settings: jsonb!) {
-      insert_user_settings_one(
-        object: { user_id: $userId, household_id: $householdId, settings: $settings },
-        on_conflict: { constraint: user_settings_user_id_household_id_key, update_columns: [settings, updated_at] }
-      ) {
-        id
-        settings
-        updated_at
-      }
-    }
-  `;
-  const variables = {
-    userId: user.id,
-    householdId,
-    settings: { theme },
-  };
-  const result = await nhostClient.graphql.request({ query: mutation, variables });
-  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to upsert theme');
-  return (result.body || result).data?.insert_user_settings_one?.settings?.theme || null;
+  const settings = await mergeUserSettings(householdId, { theme });
+  return settings?.theme || null;
 };
 
 /**
@@ -138,30 +116,8 @@ export const fetchThemeSetting = async (householdId = null) => {
  * @param {string} householdId - Household ID (optional, for per-household prefs)
  */
 export const upsertFieldPreferences = async (preferences, householdId = null) => {
-  await ensureNhostReady();
-  if (useLocalAuth || !nhostClient) return null;
-  const user = getNhostUser();
-  if (!user) throw new Error('Not authenticated');
-  const mutation = `
-    mutation UpsertUserSettings($userId: uuid!, $householdId: uuid, $settings: jsonb!) {
-      insert_user_settings_one(
-        object: { user_id: $userId, household_id: $householdId, settings: $settings }, 
-        on_conflict: { constraint: user_settings_user_id_household_id_key, update_columns: [settings, updated_at] }
-      ) {
-        id
-        settings
-        updated_at
-      }
-    }
-  `;
-  const variables = {
-    userId: user.id,
-    householdId,
-    settings: { fieldPreferences: preferences },
-  };
-  const result = await nhostClient.graphql.request({ query: mutation, variables });
-  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to upsert field preferences');
-  return (result.body || result).data?.insert_user_settings_one?.settings?.fieldPreferences || null;
+  const settings = await mergeUserSettings(householdId, { fieldPreferences: preferences });
+  return settings?.fieldPreferences || null;
 };
 
 /**
@@ -187,6 +143,85 @@ export const fetchFieldPreferences = async (householdId = null) => {
   const settings = (result.body || result).data?.user_settings?.[0]?.settings;
   return settings?.fieldPreferences || null;
 };
+
+const readUserSettings = async (householdId) => {
+  const user = getNhostUser();
+  if (!user?.id) throw new Error('Not authenticated');
+  const query = `
+    query GetUserSettings($userId: uuid!, $householdId: uuid) {
+      user_settings(
+        where: { user_id: { _eq: $userId }, household_id: { _eq: $householdId } }
+        order_by: { updated_at: desc }
+        limit: 1
+      ) {
+        id
+        settings
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({
+    query,
+    variables: { userId: user.id, householdId },
+  });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to fetch household settings');
+  const row = (result.body || result).data?.user_settings?.[0];
+  return { user, rowId: row?.id || null, settings: row?.settings || {} };
+};
+
+const mergeUserSettings = async (householdId, patch) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) {
+    const key = `household-settings:${householdId}`;
+    const current = JSON.parse(localStorage.getItem(key) || '{}');
+    const settings = { ...current, ...patch };
+    localStorage.setItem(key, JSON.stringify(settings));
+    return settings;
+  }
+
+  const { user, rowId, settings: current } = await readUserSettings(householdId);
+  const settings = { ...current, ...patch };
+  if (rowId) {
+    const mutation = `
+      mutation UpdateUserSettings($id: uuid!, $settings: jsonb!) {
+        update_user_settings_by_pk(pk_columns: { id: $id }, _set: { settings: $settings }) {
+          settings
+        }
+      }
+    `;
+    const result = await nhostClient.graphql.request({ query: mutation, variables: { id: rowId, settings } });
+    if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to update household settings');
+    return (result.body || result).data?.update_user_settings_by_pk?.settings || settings;
+  }
+
+  const mutation = `
+    mutation InsertUserSettings($userId: uuid!, $householdId: uuid, $settings: jsonb!) {
+      insert_user_settings_one(object: { user_id: $userId, household_id: $householdId, settings: $settings }) {
+        settings
+      }
+    }
+  `;
+  const result = await nhostClient.graphql.request({
+    query: mutation,
+    variables: { userId: user.id, householdId, settings },
+  });
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to save household settings');
+  return (result.body || result).data?.insert_user_settings_one?.settings || settings;
+};
+
+export const fetchHouseholdSettings = async (householdId) => {
+  await ensureNhostReady();
+  if (useLocalAuth || !nhostClient) {
+    return JSON.parse(localStorage.getItem(`household-settings:${householdId}`) || '{}');
+  }
+  const { settings } = await readUserSettings(householdId);
+  return settings;
+};
+
+export const upsertHouseholdSettings = async (householdId, settings) => {
+  if (!householdId) throw new Error('Household ID is required');
+  return mergeUserSettings(householdId, settings);
+};
+
 import {
   signUpLocal,
   signInLocal,
@@ -365,11 +400,14 @@ export const signInWithNhost = async (email, password) => {
       if (result && result.error) throw result.error
       // v4 shape: { body: { session, user }, status }
       if (result && result.body) {
-        const { session, user } = result.body
+        const { session, user, mfa } = result.body
+        if (mfa) return { session: null, mfa, error: null }
+        if (!session) return { session: null, error: null }
         if (session) nhostClient.sessionStorage.set(session)
         // Store user separately — sessionStorage only keeps token info and gets overwritten by refresh middleware
-        if (user) localStorage.setItem('nhostUser', JSON.stringify(user))
-        return { session: { ...session, user }, error: null }
+        const authenticatedUser = user || session.user
+        if (authenticatedUser) localStorage.setItem('nhostUser', JSON.stringify(authenticatedUser))
+        return { session: authenticatedUser ? { ...session, user: authenticatedUser } : session, error: null }
       }
       // v2/v3 shape: { session, ... }
       const session = result && (result.session || result)
@@ -619,14 +657,26 @@ export const createHousehold = async (householdName) => {
       throw new Error('Nhost client not available')
     }
 
-    // Query Nhost to create household
+    const user = getNhostUser()
+    if (!user?.id) throw new Error('Not authenticated')
+
     const query = `
-      mutation CreateHousehold($name: String!) {
-        insert_households_one(object: { name: $name }) {
+      mutation CreateHousehold($name: String!, $ownerId: uuid!) {
+        insert_households_one(object: {
+          name: $name,
+          owner_id: $ownerId,
+          household_members: { data: [{ user_id: $ownerId, role: "admin" }] }
+        }) {
           id
           name
           created_at
           owner_id
+          household_members {
+            id
+            user_id
+            household_id
+            role
+          }
         }
       }
     `
@@ -635,6 +685,7 @@ export const createHousehold = async (householdName) => {
       query,
       variables: {
         name: householdName,
+        ownerId: user.id,
       },
     })
 
@@ -725,6 +776,39 @@ export const getUserHouseholds = async () => {
     }
 
     const cloudHouseholds = (result.body || result).data?.households || []
+
+    const user = getNhostUser()
+    if (user?.id) {
+      for (const household of cloudHouseholds) {
+        const members = household.household_members || []
+        if (household.owner_id !== user.id || members.some((member) => member.user_id === user.id)) continue
+
+        try {
+          const membershipResult = await nhostClient.graphql.request({
+            query: `
+              mutation EnsureHouseholdOwnerMember($householdId: uuid!, $userId: uuid!) {
+                insert_household_members_one(object: {
+                  household_id: $householdId,
+                  user_id: $userId,
+                  role: "admin"
+                }) {
+                  id
+                  household_id
+                  user_id
+                  role
+                }
+              }
+            `,
+            variables: { householdId: household.id, userId: user.id },
+          })
+          if (membershipResult.errors) throw new Error(membershipResult.errors[0]?.message)
+          const createdMember = (membershipResult.body || membershipResult).data?.insert_household_members_one
+          if (createdMember) household.household_members = [...members, createdMember]
+        } catch (membershipError) {
+          console.warn('[HOUSEHOLD] Could not restore owner membership:', membershipError.message)
+        }
+      }
+    }
 
     // Merge in any households that were created locally while offline
     // (those will be missing from the cloud until sync runs)
@@ -1178,7 +1262,7 @@ export const upsertInventoryBatch = async (items = []) => {
 
     const mutation = `
       mutation UpsertInventory($objects: [inventory_insert_input!]!) {
-        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [product_name,product_id,quantity,unit,expiry_date,added_at,updated_at,storage_location,_deleted,allowGracePeriod,gracePeriodMonths,image_url] }) {
+        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [user_id,product_name,product_id,quantity,unit,expiry_date,added_at,updated_at,storage_location,_deleted,allowGracePeriod,gracePeriodMonths,image_url] }) {
           returning {
             id
             updated_at
@@ -1239,6 +1323,35 @@ export const deleteInventoryBatch = async (ids = []) => {
     console.error('[SYNC] deleteInventoryBatch error:', err)
     throw err
   }
+}
+
+export const insertCloudSyncLogs = async (entries = []) => {
+  await ensureNhostReady()
+  if (useLocalAuth || !nhostClient) throw new Error('Nhost not configured')
+  const user = getNhostUser()
+  if (!user?.id) throw new Error('Not authenticated')
+  if (entries.length === 0) return []
+
+  const mutation = `
+    mutation InsertSyncLogs($objects: [sync_log_insert_input!]!) {
+      insert_sync_log(objects: $objects) {
+        returning { id }
+      }
+    }
+  `
+  const now = new Date().toISOString()
+  const objects = entries.map((entry) => ({
+    user_id: user.id,
+    operation: entry.operation,
+    table_name: entry.table,
+    record_id: String(entry.recordId),
+    data: entry.data || null,
+    status: 'synced',
+    synced_at: now,
+  }))
+  const result = await nhostClient.graphql.request({ query: mutation, variables: { objects } })
+  if (result.errors) throw new Error(result.errors[0]?.message || 'Failed to write cloud sync log')
+  return (result.body || result).data?.insert_sync_log?.returning || []
 }
 
 /**

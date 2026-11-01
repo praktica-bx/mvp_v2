@@ -2,6 +2,8 @@ import { openDB } from 'idb'
 import {
   isNhostConfigured,
   isNhostAuthenticated,
+  getNhostUser,
+  insertCloudSyncLogs,
   upsertInventoryBatch,
   deleteInventoryBatch,
   getInventoryById,
@@ -1200,6 +1202,11 @@ export const syncToCloud = async () => {
       console.warn('[SYNC] Skipping — not authenticated (session missing or expired)')
       return { success: false, reason: 'Not authenticated' }
     }
+    const user = getNhostUser()
+    if (!user?.id) {
+      console.warn('[SYNC] Skipping — authenticated user ID is unavailable')
+      return { success: false, reason: 'User ID unavailable' }
+    }
 
     const pending = await getPendingChanges()
     console.log(`[SYNC] syncToCloud: ${pending?.length || 0} pending change(s)`)
@@ -1225,6 +1232,7 @@ export const syncToCloud = async () => {
         }
         const obj = {
           id: change.data.id,
+          user_id: user.id,
           household_id: hid,
           product_name: change.data.productName || change.data.product_name || null,
           product_id: change.data.productId || change.data.product_id || null,
@@ -1245,6 +1253,7 @@ export const syncToCloud = async () => {
     }
 
     let syncedCount = 0
+    let failedCount = 0
 
     // Send upserts (safe: mark only returned ids as synced)
     if (inventoryUpserts.length > 0) {
@@ -1253,6 +1262,21 @@ export const syncToCloud = async () => {
         const returnedIds = (res || []).map((r) => r.id).filter(Boolean)
         console.log(`[SYNC] Upsert returned ${returnedIds.length} id(s):`, returnedIds)
         syncedCount += returnedIds.length
+        const syncedChanges = pending.filter((change) =>
+          change.table === 'inventory' &&
+          change.operation !== 'delete' &&
+          returnedIds.includes(String(change.recordId))
+        )
+        try {
+          await insertCloudSyncLogs(syncedChanges.map((change) => ({
+            operation: change.operation,
+            table: change.table,
+            recordId: change.recordId,
+            data: change.data,
+          })))
+        } catch (logError) {
+          console.warn('[SYNC] Inventory synced, but cloud sync log write failed:', logError.message)
+        }
         // Mark local logs as synced only for returned ids
         for (const id of returnedIds) {
           try {
@@ -1263,9 +1287,11 @@ export const syncToCloud = async () => {
         }
         // If some requested IDs did not return, log for inspection
         if (returnedIds.length < inventoryUpserts.length) {
+          failedCount += inventoryUpserts.length - returnedIds.length
           console.warn(`[SYNC] Partial upsert: requested=${inventoryUpserts.length} returned=${returnedIds.length}`)
         }
       } catch (upErr) {
+        failedCount += inventoryUpserts.length
         console.error('[SYNC] upsertInventoryBatch failed, leaving changes unsynced:', upErr)
       }
     }
@@ -1285,10 +1311,27 @@ export const syncToCloud = async () => {
             }
           }
           syncedCount += affected
+          try {
+            const deletedChanges = pending.filter((change) =>
+              change.table === 'inventory' &&
+              change.operation === 'delete' &&
+              inventoryDeletes.includes(String(change.recordId))
+            )
+            await insertCloudSyncLogs(deletedChanges.map((change) => ({
+              operation: change.operation,
+              table: change.table,
+              recordId: change.recordId,
+              data: change.data,
+            })))
+          } catch (logError) {
+            console.warn('[SYNC] Deletes synced, but cloud sync log write failed:', logError.message)
+          }
         } else {
+          failedCount += inventoryDeletes.length
           console.warn('[SYNC] deleteInventoryBatch reported 0 affected rows')
         }
       } catch (delErr) {
+        failedCount += inventoryDeletes.length
         console.error('[SYNC] deleteInventoryBatch failed, leaving deletes unsynced:', delErr)
       }
     }
@@ -1302,7 +1345,7 @@ export const syncToCloud = async () => {
       }
     }
 
-    return { success: true, synced: syncedCount }
+    return { success: failedCount === 0, synced: syncedCount, failed: failedCount }
   } catch (err) {
     console.error('syncToCloud failed:', err)
     throw err
