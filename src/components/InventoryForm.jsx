@@ -351,6 +351,11 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
     const label = `${config.label}${config.mandatory ? ' *' : ''}`
     const value = formData[fieldName]
 
+    // Pre-compute must-have values before switch to avoid TDZ issues with const-in-switch
+    const _mustHaveItems = getMustHaveItems(formData.category, totalPersons)
+    const _mustHaveNames = _mustHaveItems.map(item => item.name).join(', ')
+    const _isMustHave = !!(formData.category && _mustHaveItems.some(item => item.name === formData.productName))
+
     switch (fieldName) {
       case 'barcode':
         return (
@@ -380,8 +385,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           </div>
         )
       case 'productName':
-        // Determine if this product is a must-have for the selected category
-        const isMustHave = !!(formData.category && getMustHaveItems(formData.category, totalPersons).some(item => item.name === value));
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
@@ -397,8 +400,8 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
             {/* Must-have item checkbox (read-only) */}
             {formData.category && value && (
               <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="checkbox" checked={isMustHave} readOnly style={{ pointerEvents: 'none' }} />
-                <span style={{ fontSize: '0.95em', color: isMustHave ? 'var(--color-success, #1a7f37)' : 'var(--color-muted, #888)' }}>
+                <input type="checkbox" checked={_isMustHave} readOnly style={{ pointerEvents: 'none' }} />
+                <span style={{ fontSize: '0.95em', color: _isMustHave ? 'var(--color-success, #1a7f37)' : 'var(--color-muted, #888)' }}>
                   This is a must-have item
                 </span>
               </div>
@@ -406,10 +409,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
           </div>
         )
       case 'category':
-        // List must-have item names for the selected category
-        const mustHaveNames = formData.category
-          ? getMustHaveItems(formData.category, totalPersons).map(item => item.name).join(', ')
-          : '';
         return (
           <div key={fieldName} className="form-group">
             <label htmlFor={fieldName}>{label}</label>
@@ -419,9 +418,9 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               ))}
             </select>
             {/* Must-have info text */}
-            {mustHaveNames && (
+            {_mustHaveNames && (
               <div style={{ fontSize: '0.92em', color: 'var(--color-muted, #888)', marginTop: 4 }}>
-                Must-have items for this category: {mustHaveNames}
+                Must-have items for this category: {_mustHaveNames}
               </div>
             )}
           </div>

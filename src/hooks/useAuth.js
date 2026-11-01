@@ -62,11 +62,14 @@ export function useAuth() {
   }
 
   const handleAuthSuccess = (session) => {
-    if (session && session.user) {
-      setUser(session.user)
+    const authenticatedUser = session?.user || getNhostUser()
+    if (authenticatedUser) {
+      setUser(authenticatedUser)
       setIsAuthenticated(true)
       setError(null)
+      return true
     }
+    return false
   }
 
   return {

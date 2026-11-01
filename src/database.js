@@ -1441,9 +1441,27 @@ export const getInventoryByDsbCategory = async (householdId) => {
     activeInventory.forEach((item) => {
       const dsbCategory = getDsbCategory(item.category)
       if (dsbCategory && categoryCounts.hasOwnProperty(dsbCategory)) {
-        // For most items, count 1 per item. For water/food, use quantity if available
         const quantityToAdd = item.quantity || 1
-        if (dsbCategory === 'water' || dsbCategory === 'food') {
+        if (dsbCategory === 'water') {
+          const unit = String(item.unit || '').trim().toLowerCase()
+          const unitFactor = ['l', 'liter', 'liters', 'litre', 'litres'].includes(unit)
+            ? 1
+            : ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'].includes(unit)
+              ? 0.001
+              : null
+          const packageSize = String(item.packageSize || '').trim()
+          const packageVolume = packageSize.match(/(\d+(?:[.,]\d+)?)\s*(ml|milliliters?|millilitres?|l|liters?|litres?)\b/i)
+          const barePackageVolume = packageSize.match(/^\d+(?:[.,]\d+)?$/)
+          const litersPerItem = unitFactor ?? (packageVolume
+            ? Number(packageVolume[1].replace(',', '.')) * (/^m/i.test(packageVolume[2]) ? 0.001 : 1)
+            : barePackageVolume
+              ? Number(packageSize.replace(',', '.'))
+              : null)
+
+          categoryCounts.water += litersPerItem === null
+            ? quantityToAdd
+            : Number(quantityToAdd) * litersPerItem
+        } else if (dsbCategory === 'food') {
           categoryCounts[dsbCategory] += quantityToAdd
         } else {
           categoryCounts[dsbCategory] += 1

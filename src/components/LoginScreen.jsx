@@ -26,7 +26,12 @@ export default function LoginScreen({ onAuthSuccess }) {
         }
         if (session) {
           setSuccess('Login successful! Redirecting...')
-          setTimeout(() => onAuthSuccess(session), 500)
+          setTimeout(() => {
+            if (!onAuthSuccess(session)) {
+              setSuccess('')
+              setError('Sign-in succeeded, but the account session could not be loaded. Please try again.')
+            }
+          }, 500)
         }
       } else {
         // Sign up mode
@@ -48,7 +53,12 @@ export default function LoginScreen({ onAuthSuccess }) {
         }
         if (session) {
           setSuccess('Account created! You are now logged in.')
-          setTimeout(() => onAuthSuccess(session), 500)
+          setTimeout(() => {
+            if (!onAuthSuccess(session)) {
+              setSuccess('')
+              setError('Account created, but the account session could not be loaded. Please try signing in again.')
+            }
+          }, 500)
         }
       }
     } catch (err) {
