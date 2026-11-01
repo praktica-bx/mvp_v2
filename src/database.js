@@ -2,7 +2,6 @@ import { openDB } from 'idb'
 import {
   isNhostConfigured,
   isNhostAuthenticated,
-  getNhostUser,
   insertCloudSyncLogs,
   upsertInventoryBatch,
   deleteInventoryBatch,
@@ -1232,12 +1231,6 @@ export const syncToCloud = async () => {
       console.warn('[SYNC] Skipping — not authenticated (session missing or expired)')
       return { success: false, reason: 'Not authenticated' }
     }
-    const user = getNhostUser()
-    if (!user?.id) {
-      console.warn('[SYNC] Skipping — authenticated user ID is unavailable')
-      return { success: false, reason: 'User ID unavailable' }
-    }
-
     const pending = await getPendingChanges()
     console.log(`[SYNC] syncToCloud: ${pending?.length || 0} pending change(s)`)
     if (!pending || pending.length === 0) return { success: true, synced: 0 }
@@ -1262,7 +1255,6 @@ export const syncToCloud = async () => {
         }
         const obj = {
           id: change.data.id,
-          user_id: user.id,
           household_id: hid,
           product_name: change.data.productName || change.data.product_name || null,
           product_id: change.data.productId || change.data.product_id || null,

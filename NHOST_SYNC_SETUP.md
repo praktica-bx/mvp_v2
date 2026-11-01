@@ -56,13 +56,13 @@ In Nhost Console → Hasura → Data:
 
 **For `inventory` table:**
 - SELECT: `user_id` = current user
-- INSERT: `user_id` = current user
-- UPDATE: `user_id` = current user
+- INSERT: preset `user_id` to `X-Hasura-User-Id`; check `user_id` = current user
+- UPDATE: check `user_id` = current user; do not allow clients to update `user_id`
 - DELETE: `user_id` = current user
 
 **For `sync_log` table:**
 - SELECT: `user_id` = current user
-- INSERT: `user_id` = current user
+- INSERT: preset `user_id` to `X-Hasura-User-Id`; check `user_id` = current user
 - UPDATE: `user_id` = current user
 
 **For `user_settings` table:**

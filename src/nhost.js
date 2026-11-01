@@ -1262,7 +1262,7 @@ export const upsertInventoryBatch = async (items = []) => {
 
     const mutation = `
       mutation UpsertInventory($objects: [inventory_insert_input!]!) {
-        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [user_id,product_name,product_id,quantity,unit,expiry_date,added_at,updated_at,storage_location,_deleted,allowGracePeriod,gracePeriodMonths,image_url] }) {
+        insert_inventory(objects: $objects, on_conflict: { constraint: inventory_pkey, update_columns: [product_name,product_id,quantity,unit,expiry_date,added_at,updated_at,storage_location,_deleted,allowGracePeriod,gracePeriodMonths,image_url] }) {
           returning {
             id
             updated_at
@@ -1328,8 +1328,7 @@ export const deleteInventoryBatch = async (ids = []) => {
 export const insertCloudSyncLogs = async (entries = []) => {
   await ensureNhostReady()
   if (useLocalAuth || !nhostClient) throw new Error('Nhost not configured')
-  const user = getNhostUser()
-  if (!user?.id) throw new Error('Not authenticated')
+  if (!isNhostAuthenticated()) throw new Error('Not authenticated')
   if (entries.length === 0) return []
 
   const mutation = `
@@ -1341,7 +1340,6 @@ export const insertCloudSyncLogs = async (entries = []) => {
   `
   const now = new Date().toISOString()
   const objects = entries.map((entry) => ({
-    user_id: user.id,
     operation: entry.operation,
     table_name: entry.table,
     record_id: String(entry.recordId),
