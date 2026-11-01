@@ -590,7 +590,14 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   const visibleFields = Object.keys(preferences).filter((key) => preferences[key]?.visible)
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div
+      className="modal-overlay"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget && event.pointerType === 'touch') {
+          onCancel()
+        }
+      }}
+    >
       <div className="modal u-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
