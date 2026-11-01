@@ -4,7 +4,7 @@ function normalizeExpiryDate(raw) {
   if (/^\d{2}\.\d{4}$/.test(raw)) return raw;
   // If DD.MM.YYYY, split and use MM.YYYY
   if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
-    const [dd, mm, yyyy] = raw.split('.')
+    const [, mm, yyyy] = raw.split('.')
     return `${mm}.${yyyy}`;
   }
   // Try ISO or other formats
@@ -99,7 +99,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   const { openConflictModal } = useConflictModal()
 
   const [formData, setFormData] = useState(EMPTY_FORM)
-  const [mustHaveValues, setMustHaveValues] = useState({})
   const [preferences, setPreferences] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -249,13 +248,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   }
 
   const validateForm = () => {
-        // Validate must-have items for the selected category
-        const mustHaves = getMustHaveItems(formData.category, totalPersons)
-        for (const item of mustHaves) {
-          if (!item.optional && (!mustHaveValues[item.name] || Number(mustHaveValues[item.name]) < item.quantity)) {
-            throw new Error(`Must have at least ${item.quantity} ${item.unit} of ${item.name}`)
-          }
-        }
     if (!preferences) return true
     for (const [field, config] of Object.entries(preferences)) {
       if (config.mandatory) {
@@ -296,8 +288,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
       itemToSave.allowGracePeriod = !!formData.allowGracePeriod
       itemToSave.gracePeriodMonths = formData.allowGracePeriod ? parseInt(formData.gracePeriodMonths, 10) || 0 : 0
       itemToSave.prescriptionRequired = !!formData.prescriptionRequired
-      // Store must-have item values
-      itemToSave.mustHave = mustHaveValues
 
       // Only stamp addedDate when creating (not editing — preserve original creation date)
       if (!itemId) {
@@ -469,7 +459,7 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
               required={config.mandatory}
               pattern="\d{2}\.\d{4}"
               placeholder="MM.YYYY"
-              inputMode="numeric"
+              inputMode="text"
               maxLength={7}
             />
             <small>Format: MM.YYYY (e.g. 05.2026)</small>
@@ -598,31 +588,6 @@ export default function InventoryForm({ itemId = null, onSave, onCancel, onOpenS
   }
 
   const visibleFields = Object.keys(preferences).filter((key) => preferences[key]?.visible)
-
-  // Render must-have item fields for the selected category
-  const renderMustHaveFields = () => {
-    const mustHaves = getMustHaveItems(formData.category, totalPersons)
-    if (!mustHaves.length) return null
-    return (
-      <div className="must-have-fields">
-        <h4>Must-have items for this category:</h4>
-        {mustHaves.map(item => (
-          <div key={item.name} className="form-group">
-            <label htmlFor={`musthave-${item.name}`}>{item.name} ({item.quantity} {item.unit}{item.perPerson ? ' per person' : ''})</label>
-            <input
-              id={`musthave-${item.name}`}
-              type="number"
-              min="0"
-              name={item.name}
-              value={mustHaveValues[item.name] || ''}
-              onChange={e => handleMustHaveChange(item.name, e.target.value)}
-              required={!item.optional}
-            />
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
