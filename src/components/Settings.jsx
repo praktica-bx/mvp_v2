@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { ThemeSwitcherFull } from './ThemeSwitcher'
 import ColorSwatch from './ColorSwatch'
 import './Settings.css'
-import { syncToCloud, getSetting } from '../database'
+import { exportLocalBackup, getPendingChanges, syncToCloud } from '../database'
 
 export default function Settings({ onClose }) {
   const [activeTab, setActiveTab] = useState('display')
@@ -13,7 +13,12 @@ export default function Settings({ onClose }) {
   
   const [showColorSwatches, setShowColorSwatches] = useState(false)
   const [syncStatus, setSyncStatus] = useState(null)
-  const [lastSync, setLastSync] = useState(null)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [backupLink, setBackupLink] = useState(null)
+
+  useEffect(() => () => {
+    if (backupLink?.url) URL.revokeObjectURL(backupLink.url)
+  }, [backupLink])
 
   
 
@@ -26,6 +31,17 @@ export default function Settings({ onClose }) {
     const newValue = !notifications
     setNotifications(newValue)
     localStorage.setItem('notifications-enabled', newValue.toString())
+  }
+
+  const prepareBackup = async () => {
+    try {
+      const backup = await exportLocalBackup()
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      setBackupLink({ url, filename: `emergency-supply-backup-${timestamp}.json` })
+    } catch (error) {
+      setSyncStatus(`Backup failed: ${error.message}`)
+    }
   }
 
   
@@ -117,8 +133,13 @@ export default function Settings({ onClose }) {
               <h3>Data Management</h3>
 
               <div className="setting-group">
-                <button className="btn btn-secondary">📥 Export Inventory (CSV)</button>
-                <small>Download your inventory as a spreadsheet</small>
+                <button className="btn btn-secondary" onClick={prepareBackup}>Prepare Local Backup (JSON)</button>
+                {backupLink && (
+                  <a className="btn btn-primary" href={backupLink.url} download={backupLink.filename}>
+                    Download Backup
+                  </a>
+                )}
+                <small>Includes locally stored inventory and pending sync changes. Keep this file somewhere safe.</small>
               </div>
 
               <div className="setting-group">
@@ -136,22 +157,34 @@ export default function Settings({ onClose }) {
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <button
                     className="btn btn-primary"
+                    disabled={isSyncing}
                     onClick={async () => {
-                      setSyncStatus('running')
+                      setIsSyncing(true)
+                      setSyncStatus('Syncing…')
                       try {
                         const res = await syncToCloud()
-                        setSyncStatus(res.success ? 'ok' : 'failed')
-                        setLastSync(new Date().toISOString())
+                        const pending = await getPendingChanges()
+                        if (!res.success) {
+                          setSyncStatus(`Sync did not complete: ${res.reason || res.message || `${res.failed || pending.length} change(s) failed`}`)
+                        } else if (res.synced === 0 && pending.length > 0) {
+                          setSyncStatus(`No changes synced; ${pending.length} change(s) remain pending.`)
+                        } else if (res.synced === 0) {
+                          setSyncStatus('No pending changes to sync.')
+                        } else {
+                          setSyncStatus(`Synced ${res.synced} change(s); ${pending.length} remain pending.`)
+                        }
                       } catch (err) {
-                        setSyncStatus('failed')
+                        setSyncStatus(`Sync failed: ${err.message}`)
                         console.error('Manual sync failed:', err)
+                      } finally {
+                        setIsSyncing(false)
                       }
                     }}
                   >
-                    🔁 Sync now
+                    {isSyncing ? 'Syncing…' : '🔁 Sync now'}
                   </button>
-                  <small style={{ opacity: 0.9 }}>{syncStatus === 'running' ? 'Syncing…' : syncStatus === 'ok' ? 'Last synced just now' : syncStatus === 'failed' ? 'Last sync failed' : ''}</small>
                 </div>
+                {syncStatus && <small role="status" style={{ opacity: 0.9 }}>{syncStatus}</small>}
                 <small>Sync pending local changes to the cloud and fetch recent updates on startup.</small>
               </div>
             </div>

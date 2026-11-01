@@ -1065,6 +1065,36 @@ export const getInventory = async (householdId, includeDeleted = false) => {
   }
 }
 
+export const exportLocalBackup = async () => {
+  const db = await initDB()
+  const storeNames = ['inventory', 'products', 'settings', 'sync_log']
+  const stores = {}
+
+  for (const storeName of storeNames) {
+    if (db.objectStoreNames.contains(storeName)) {
+      stores[storeName] = await db.getAll(storeName)
+    }
+  }
+
+  const localSettings = {}
+  const localKeyPattern = /^(currentHouseholdId|cachedHouseholds|pendingHouseholds|households|household-members|contingency-persons)$|^household:/
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (key && localKeyPattern.test(key)) {
+      localSettings[key] = localStorage.getItem(key)
+    }
+  }
+
+  return {
+    format: 'emergency-supply-local-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    currentHouseholdId: localStorage.getItem('currentHouseholdId'),
+    localSettings,
+    stores,
+  }
+}
+
 /**
  * Get inventory items by product ID
  * @param {number} productId - Product ID
